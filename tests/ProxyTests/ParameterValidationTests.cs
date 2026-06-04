@@ -205,6 +205,8 @@ public class ParameterValidationTests
     [Theory]
     [InlineData("llama-3.3-70b-versatile")]
     [InlineData("qwen/qwen3-32b")]
+    [InlineData("meta-llama/llama-4-scout-17b-16e-instruct")]
+    [InlineData("openai/gpt-oss-120b")]
     public void Groq_Models_NoReasoningEffortLeakage(string model)
     {
         RequestTransformer sut = CreateTransformer();
@@ -217,6 +219,8 @@ public class ParameterValidationTests
     [Theory]
     [InlineData("llama-3.3-70b-versatile")]
     [InlineData("qwen/qwen3-32b")]
+    [InlineData("meta-llama/llama-4-scout-17b-16e-instruct")]
+    [InlineData("openai/gpt-oss-120b")]
     public void Groq_Models_MaxTokensInjected(string model)
     {
         RequestTransformer sut = CreateTransformer();
