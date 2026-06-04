@@ -177,12 +177,13 @@ Model metadata and defaults are loaded from `config/model-selection/*.json`:
 
 ```
 config/model-selection/
-├── deepseek.json      # DeepSeek models (v4-pro, v4-flash, coder, etc.)
-├── openai.json        # OpenAI models (gpt-5, gpt-4o, etc.)
-├── nvidia.json        # NVIDIA/NIM models (llama, mixtral, etc.)
-├── groq.json          # Groq models (mixtral, llama3, etc.)
-├── openrouter.json    # OpenRouter catalog
-└── ollamacloud.json   # Ollama Cloud models
+├── deepseek.json      # DeepSeek (v4-pro, v4-flash, coder-6.7b)
+├── openai.json        # OpenAI (gpt-5, gpt-5-mini, gpt-4.1, gpt-4o)
+├── nvidia.json        # NVIDIA NIM (8 modelos: deepseek, qwen, nemotron, etc.)
+├── groq.json          # Groq (llama-3.3-70b, qwen3-32b, llama-4-scout, gpt-oss-120b)
+├── openrouter.json    # OpenRouter free (nemotron-3-super:free, qwen3-coder:free)
+├── ollamacloud.json   # Ollama Cloud (gemma3:4b, nemotron-3-super)
+└── moonshot.json      # Moonshot/Kimi (kimi-k2.6, moonshot-v1-*)
 ```
 
 ### Example: DeepSeek Configuration
@@ -247,16 +248,20 @@ The proxy automatically filters and adapts parameters based on the upstream prov
 
 ### Parameter Filtering Rules
 
-| Parameter | DeepSeek | OpenAI | NVIDIA | Groq | OpenRouter | Support |
-|-----------|----------|--------|--------|------|------------|---------|
-| `temperature` | ✅ | ✅ | ✅ | ✅ | ✅ | All |
-| `top_p` | ✅ | ✅ | ✅ | ✅ | ✅ | All |
-| `top_k` | ✅ | ❌ | ✅ | ✅ | ✅ | Most |
-| `max_tokens` | ✅ | ✅ | ✅ | ✅ | ✅ | All |
-| `reasoning_effort` | ✅ | ✅ (o-series) | ❌ | ❌ | ❌ | Limited |
-| `tools` | ✅ | ✅ | ✅ | ❌ | ✅ | Most |
-| `tool_choice` | ✅ | ✅ | ✅ | ❌ | ✅ | Most |
-| `function_call` | ❌ (deprecated) | ❌ (deprecated) | ❌ | ❌ | ❌ | None |
+| Parameter | DeepSeek | OpenAI | NVIDIA | Groq | OpenRouter | Moonshot/Kimi | Support |
+|-----------|----------|--------|--------|------|------------|---------------|---------|
+| `temperature` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | All |
+| `top_p` | ✅ (⚠️ no con reasoning) | ✅ (⚠️ no con reasoning) | ✅ | ✅ (⚠️ no recomiendan con temp) | ✅ (passthrough) | ✅ | All |
+| `top_k` | ❌ | ❌ | ✅ | ✅ | ✅ (passthrough) | ❌ | NVIDIA/Groq/OpenRouter |
+| `max_tokens` | ✅ | ✅ | ✅ | ✅ | ✅ (passthrough) | ✅ | All |
+| `reasoning_effort` | ✅ (high/max) | ✅ (gpt-5/mini: o-series) | ❌ | ❌ | ❌ (passthrough si modelo lo soporta) | ❌ | DeepSeek/OpenAI |
+| `tools` | ✅ | ✅ | ✅ | ❌ | ✅ (passthrough) | ✅ | Most |
+| `tool_choice` | ✅ | ✅ | ✅ | ❌ | ✅ (passthrough) | ✅ | Most |
+| `function_call` | ❌ (deprecated) | ❌ (deprecated) | ❌ | ❌ | ❌ | ❌ | None |
+| `frequency_penalty` | ✅ | ✅ | ✅ | ✅ | ✅ (passthrough) | ✅ | All |
+| `presence_penalty` | ✅ | ✅ | ✅ | ✅ | ✅ (passthrough) | ✅ | All |
+| `seed` | ✅ | ✅ | ✅ | ✅ | ✅ (passthrough) | ✅ | All |
+| `stop` | ✅ | ✅ | ✅ | ✅ | ✅ (passthrough) | ✅ | All |
 
 ### Parameter Normalization Examples
 
