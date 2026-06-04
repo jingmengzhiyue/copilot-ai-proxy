@@ -52,6 +52,62 @@ public class RequestTransformerTests
     }
 
     [Fact]
+    public void ModifyRequest_RemovesEmptyAssistantMessagesWithoutToolCalls()
+    {
+        RequestTransformer sut = CreateTransformer();
+
+        using JsonDocument request = JsonDocument.Parse("""
+            {
+              "model": "m",
+              "messages": [
+                { "role": "user", "content": "hola" },
+                { "role": "assistant", "content": "" },
+                { "role": "assistant", "content": "ok" }
+              ]
+            }
+            """);
+
+        string? result = sut.ModifyRequest(request);
+
+        Assert.NotNull(result);
+        using JsonDocument modified = JsonDocument.Parse(result!);
+        JsonElement messages = modified.RootElement.GetProperty("messages");
+        Assert.Equal(2, messages.GetArrayLength());
+        Assert.Equal("user", messages[0].GetProperty("role").GetString());
+        Assert.Equal("assistant", messages[1].GetProperty("role").GetString());
+        Assert.Equal("ok", messages[1].GetProperty("content").GetString());
+    }
+
+    [Fact]
+    public void ModifyRequest_KeepsEmptyAssistantWhenToolCallsPresent()
+    {
+        RequestTransformer sut = CreateTransformer();
+
+        using JsonDocument request = JsonDocument.Parse("""
+            {
+              "model": "m",
+              "messages": [
+                {
+                  "role": "assistant",
+                  "content": "",
+                  "tool_calls": [
+                    {
+                      "id": "call_1",
+                      "type": "function",
+                      "function": { "name": "ping", "arguments": "{}" }
+                    }
+                  ]
+                }
+              ]
+            }
+            """);
+
+        string? result = sut.ModifyRequest(request);
+
+        Assert.Null(result);
+    }
+
+    [Fact]
     public void ApplyExecutionDefaults_KeepsBodyWhenNoConfiguredDefaults()
     {
         RequestTransformer sut = CreateTransformer();

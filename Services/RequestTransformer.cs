@@ -159,6 +159,8 @@ internal sealed class RequestTransformer
                 if (role == "assistant")
                 {
                     bool hasTc = msg.TryGetProperty("tool_calls", out JsonElement tcArr) && tcArr.GetArrayLength() > 0;
+                    bool hasFunctionCall = msg.TryGetProperty("function_call", out JsonElement fc)
+                        && fc.ValueKind == JsonValueKind.Object;
                     string? key = null;
 
                     if (hasTc)
@@ -172,6 +174,15 @@ internal sealed class RequestTransformer
                     else
                     {
                         key = $"assistant:{idx++}";
+                    }
+
+                    // Some providers (e.g. Moonshot/Kimi) reject assistant messages whose
+                    // content is empty when there are no tool/function calls associated.
+                    // Drop those invalid placeholders before forwarding upstream.
+                    if (!hasTc && !hasFunctionCall && IsAssistantContentEmpty(msg))
+                    {
+                        modified = true;
+                        continue;
                     }
 
                     if (key != null && _reasoningCacheService.TryGet(key, out string? rc))
@@ -203,5 +214,20 @@ internal sealed class RequestTransformer
         w.Flush();
 
         return modified ? Encoding.UTF8.GetString(ms.ToArray()) : null;
+    }
+
+    private static bool IsAssistantContentEmpty(JsonElement msg)
+    {
+        if (!msg.TryGetProperty("content", out JsonElement content))
+            return true;
+
+        return content.ValueKind switch
+        {
+            JsonValueKind.Null => true,
+            JsonValueKind.Undefined => true,
+            JsonValueKind.String => string.IsNullOrWhiteSpace(content.GetString()),
+            JsonValueKind.Array => content.GetArrayLength() == 0,
+            _ => false
+        };
     }
 }

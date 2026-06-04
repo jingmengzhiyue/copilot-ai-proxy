@@ -138,6 +138,18 @@ internal static class OllamaEndpoints
 
             // ── Convert Ollama → OpenAI request ──────────────────────────
             string openAiBody = ConvertOllamaToOpenAi(body, ollamaUpstreamModel, isStream);
+            try
+            {
+                using JsonDocument openAiDoc = JsonDocument.Parse(openAiBody);
+                string? modifiedRequest = requestTransformer.ModifyRequest(openAiDoc);
+                if (modifiedRequest is not null)
+                    openAiBody = modifiedRequest;
+            }
+            catch
+            {
+                // Keep original request body if pre-sanitization parsing fails.
+            }
+
             // Apply execution defaults with provider-aware parameter filtering
             openAiBody = requestTransformer.ApplyExecutionDefaults(openAiBody, ollamaEffectiveModel, ollamaProvider.Name);
 
