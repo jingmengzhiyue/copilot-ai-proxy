@@ -1,0 +1,717 @@
+{
+  "summary": {
+    "generated_at_utc": "2026-06-04T13:16:17.2881384Z",
+    "total_models": 27,
+    "successful": 8,
+    "failed": 19,
+    "source": "http://localhost:11434/api/tags",
+    "notes": [
+      "Configuración óptima heurística por familia de modelo",
+      "Capacidades y límites base tomados de /api/tags del proxy"
+    ]
+  },
+  "models": [
+    {
+      "model": "deepseek-ai/deepseek-v4-pro",
+      "provider": "nvidia_nim",
+      "tested_at_utc": "2026-06-04T13:15:18.0034138Z",
+      "test": {
+        "latency_ms": 15036,
+        "error": "The request was canceled due to the configured HttpClient.Timeout of 15 seconds elapsing.",
+        "success": false,
+        "sample_response": "",
+        "status": "error"
+      },
+      "capabilities": {
+        "max_output_tokens": 384000,
+        "context_length": 1000000,
+        "supports_tools": true,
+        "supports_vision": false
+      },
+      "optimal_parameters": {
+        "max_tokens": 4096,
+        "top_p": 0.9,
+        "tool_choice": "auto",
+        "stream": true,
+        "temperature": 0.2,
+        "response_format": "text"
+      }
+    },
+    {
+      "model": "gpt-oss:120b",
+      "provider": "nvidia_nim",
+      "tested_at_utc": "2026-06-04T13:15:18.8827617Z",
+      "test": {
+        "latency_ms": 869,
+        "error": "",
+        "success": false,
+        "sample_response": "",
+        "status": "empty_response"
+      },
+      "capabilities": {
+        "max_output_tokens": 16384,
+        "context_length": 128000,
+        "supports_tools": true,
+        "supports_vision": false
+      },
+      "optimal_parameters": {
+        "max_tokens": 4096,
+        "top_p": 0.9,
+        "tool_choice": "auto",
+        "stream": true,
+        "temperature": 0.3,
+        "response_format": "text"
+      }
+    },
+    {
+      "model": "gpt-oss:20b",
+      "provider": "nvidia_nim",
+      "tested_at_utc": "2026-06-04T13:15:19.6158329Z",
+      "test": {
+        "latency_ms": 732,
+        "error": "",
+        "success": false,
+        "sample_response": "",
+        "status": "empty_response"
+      },
+      "capabilities": {
+        "max_output_tokens": 16384,
+        "context_length": 128000,
+        "supports_tools": true,
+        "supports_vision": false
+      },
+      "optimal_parameters": {
+        "max_tokens": 4096,
+        "top_p": 0.9,
+        "tool_choice": "auto",
+        "stream": true,
+        "temperature": 0.3,
+        "response_format": "text"
+      }
+    },
+    {
+      "model": "deepseek-v3.1:671b",
+      "provider": "nvidia_nim",
+      "tested_at_utc": "2026-06-04T13:15:19.9900261Z",
+      "test": {
+        "latency_ms": 374,
+        "error": "Response status code does not indicate success: 403 (Forbidden).",
+        "success": false,
+        "sample_response": "",
+        "status": "error"
+      },
+      "capabilities": {
+        "max_output_tokens": 384000,
+        "context_length": 1000000,
+        "supports_tools": true,
+        "supports_vision": false
+      },
+      "optimal_parameters": {
+        "max_tokens": 4096,
+        "top_p": 0.9,
+        "tool_choice": "auto",
+        "stream": true,
+        "temperature": 0.3,
+        "response_format": "text"
+      }
+    },
+    {
+      "model": "deepseek-v3.2",
+      "provider": "nvidia_nim",
+      "tested_at_utc": "2026-06-04T13:15:20.3956405Z",
+      "test": {
+        "latency_ms": 405,
+        "error": "Response status code does not indicate success: 403 (Forbidden).",
+        "success": false,
+        "sample_response": "",
+        "status": "error"
+      },
+      "capabilities": {
+        "max_output_tokens": 384000,
+        "context_length": 1000000,
+        "supports_tools": true,
+        "supports_vision": false
+      },
+      "optimal_parameters": {
+        "max_tokens": 4096,
+        "top_p": 0.9,
+        "tool_choice": "auto",
+        "stream": true,
+        "temperature": 0.3,
+        "response_format": "text"
+      }
+    },
+    {
+      "model": "deepseek-v4-flash",
+      "provider": "nvidia_nim",
+      "tested_at_utc": "2026-06-04T13:15:20.7633680Z",
+      "test": {
+        "latency_ms": 367,
+        "error": "Response status code does not indicate success: 403 (Forbidden).",
+        "success": false,
+        "sample_response": "",
+        "status": "error"
+      },
+      "capabilities": {
+        "max_output_tokens": 384000,
+        "context_length": 1000000,
+        "supports_tools": true,
+        "supports_vision": false
+      },
+      "optimal_parameters": {
+        "max_tokens": 4096,
+        "top_p": 0.9,
+        "tool_choice": "auto",
+        "stream": true,
+        "temperature": 0.3,
+        "response_format": "text"
+      }
+    },
+    {
+      "model": "deepseek-v4-pro",
+      "provider": "nvidia_nim",
+      "tested_at_utc": "2026-06-04T13:15:21.1630819Z",
+      "test": {
+        "latency_ms": 399,
+        "error": "Response status code does not indicate success: 403 (Forbidden).",
+        "success": false,
+        "sample_response": "",
+        "status": "error"
+      },
+      "capabilities": {
+        "max_output_tokens": 384000,
+        "context_length": 1000000,
+        "supports_tools": true,
+        "supports_vision": false
+      },
+      "optimal_parameters": {
+        "max_tokens": 4096,
+        "top_p": 0.9,
+        "tool_choice": "auto",
+        "stream": true,
+        "temperature": 0.2,
+        "response_format": "text"
+      }
+    },
+    {
+      "model": "qwen/qwen3-coder-480b-a35b-instruct",
+      "provider": "nvidia_nim",
+      "tested_at_utc": "2026-06-04T13:15:36.1739463Z",
+      "test": {
+        "latency_ms": 15013,
+        "error": "The request was canceled due to the configured HttpClient.Timeout of 15 seconds elapsing.",
+        "success": false,
+        "sample_response": "",
+        "status": "error"
+      },
+      "capabilities": {
+        "max_output_tokens": 16384,
+        "context_length": 128000,
+        "supports_tools": true,
+        "supports_vision": false
+      },
+      "optimal_parameters": {
+        "max_tokens": 4096,
+        "top_p": 0.9,
+        "tool_choice": "auto",
+        "stream": true,
+        "temperature": 0.15,
+        "response_format": "text"
+      }
+    },
+    {
+      "model": "qwen3-coder-next",
+      "provider": "nvidia_nim",
+      "tested_at_utc": "2026-06-04T13:15:36.7568616Z",
+      "test": {
+        "latency_ms": 582,
+        "error": "",
+        "success": true,
+        "sample_response": "OK",
+        "status": "ok"
+      },
+      "capabilities": {
+        "max_output_tokens": 16384,
+        "context_length": 128000,
+        "supports_tools": true,
+        "supports_vision": false
+      },
+      "optimal_parameters": {
+        "max_tokens": 4096,
+        "top_p": 0.9,
+        "tool_choice": "auto",
+        "stream": true,
+        "temperature": 0.15,
+        "response_format": "text"
+      }
+    },
+    {
+      "model": "qwen3-coder:480b",
+      "provider": "nvidia_nim",
+      "tested_at_utc": "2026-06-04T13:15:37.7428194Z",
+      "test": {
+        "latency_ms": 985,
+        "error": "",
+        "success": true,
+        "sample_response": "OK",
+        "status": "ok"
+      },
+      "capabilities": {
+        "max_output_tokens": 16384,
+        "context_length": 128000,
+        "supports_tools": true,
+        "supports_vision": false
+      },
+      "optimal_parameters": {
+        "max_tokens": 4096,
+        "top_p": 0.9,
+        "tool_choice": "auto",
+        "stream": true,
+        "temperature": 0.15,
+        "response_format": "text"
+      }
+    },
+    {
+      "model": "qwen3-next:80b",
+      "provider": "nvidia_nim",
+      "tested_at_utc": "2026-06-04T13:15:38.8371340Z",
+      "test": {
+        "latency_ms": 1094,
+        "error": "",
+        "success": false,
+        "sample_response": "",
+        "status": "empty_response"
+      },
+      "capabilities": {
+        "max_output_tokens": 8192,
+        "context_length": 128000,
+        "supports_tools": true,
+        "supports_vision": false
+      },
+      "optimal_parameters": {
+        "max_tokens": 4096,
+        "top_p": 0.9,
+        "tool_choice": "auto",
+        "stream": true,
+        "temperature": 0.3,
+        "response_format": "text"
+      }
+    },
+    {
+      "model": "qwen3-vl:235b",
+      "provider": "nvidia_nim",
+      "tested_at_utc": "2026-06-04T13:15:50.2946080Z",
+      "test": {
+        "latency_ms": 11459,
+        "error": "",
+        "success": true,
+        "sample_response": "OK",
+        "status": "ok"
+      },
+      "capabilities": {
+        "max_output_tokens": 8192,
+        "context_length": 128000,
+        "supports_tools": true,
+        "supports_vision": true
+      },
+      "optimal_parameters": {
+        "max_tokens": 4096,
+        "top_p": 0.9,
+        "tool_choice": "auto",
+        "stream": true,
+        "temperature": 0.3,
+        "response_format": "text"
+      }
+    },
+    {
+      "model": "qwen3-vl:235b-instruct",
+      "provider": "nvidia_nim",
+      "tested_at_utc": "2026-06-04T13:15:51.1973872Z",
+      "test": {
+        "latency_ms": 902,
+        "error": "",
+        "success": true,
+        "sample_response": "OK",
+        "status": "ok"
+      },
+      "capabilities": {
+        "max_output_tokens": 8192,
+        "context_length": 128000,
+        "supports_tools": true,
+        "supports_vision": true
+      },
+      "optimal_parameters": {
+        "max_tokens": 4096,
+        "top_p": 0.9,
+        "tool_choice": "auto",
+        "stream": true,
+        "temperature": 0.3,
+        "response_format": "text"
+      }
+    },
+    {
+      "model": "qwen3.5:397b",
+      "provider": "nvidia_nim",
+      "tested_at_utc": "2026-06-04T13:15:51.5728182Z",
+      "test": {
+        "latency_ms": 375,
+        "error": "Response status code does not indicate success: 403 (Forbidden).",
+        "success": false,
+        "sample_response": "",
+        "status": "error"
+      },
+      "capabilities": {
+        "max_output_tokens": 8192,
+        "context_length": 128000,
+        "supports_tools": true,
+        "supports_vision": false
+      },
+      "optimal_parameters": {
+        "max_tokens": 4096,
+        "top_p": 0.9,
+        "tool_choice": "auto",
+        "stream": true,
+        "temperature": 0.3,
+        "response_format": "text"
+      }
+    },
+    {
+      "model": "mistral-large-3:675b",
+      "provider": "nvidia_nim",
+      "tested_at_utc": "2026-06-04T13:15:51.9757713Z",
+      "test": {
+        "latency_ms": 402,
+        "error": "Response status code does not indicate success: 403 (Forbidden).",
+        "success": false,
+        "sample_response": "",
+        "status": "error"
+      },
+      "capabilities": {
+        "max_output_tokens": 16384,
+        "context_length": 128000,
+        "supports_tools": true,
+        "supports_vision": false
+      },
+      "optimal_parameters": {
+        "max_tokens": 4096,
+        "top_p": 0.9,
+        "tool_choice": "auto",
+        "stream": true,
+        "temperature": 0.3,
+        "response_format": "text"
+      }
+    },
+    {
+      "model": "qwen/qwen3.5-397b-a17b",
+      "provider": "nvidia_nim",
+      "tested_at_utc": "2026-06-04T13:15:52.9035359Z",
+      "test": {
+        "latency_ms": 927,
+        "error": "",
+        "success": true,
+        "sample_response": "OK",
+        "status": "ok"
+      },
+      "capabilities": {
+        "max_output_tokens": 8192,
+        "context_length": 128000,
+        "supports_tools": true,
+        "supports_vision": false
+      },
+      "optimal_parameters": {
+        "max_tokens": 4096,
+        "top_p": 0.9,
+        "tool_choice": "auto",
+        "stream": true,
+        "temperature": 0.3,
+        "response_format": "text"
+      }
+    },
+    {
+      "model": "nemotron-3-nano:30b",
+      "provider": "nvidia_nim",
+      "tested_at_utc": "2026-06-04T13:15:53.6338226Z",
+      "test": {
+        "latency_ms": 729,
+        "error": "",
+        "success": false,
+        "sample_response": "",
+        "status": "empty_response"
+      },
+      "capabilities": {
+        "max_output_tokens": 16384,
+        "context_length": 128000,
+        "supports_tools": true,
+        "supports_vision": false
+      },
+      "optimal_parameters": {
+        "max_tokens": 4096,
+        "top_p": 0.9,
+        "tool_choice": "auto",
+        "stream": true,
+        "temperature": 0.3,
+        "response_format": "text"
+      }
+    },
+    {
+      "model": "nemotron-3-super",
+      "provider": "nvidia_nim",
+      "tested_at_utc": "2026-06-04T13:15:54.2976027Z",
+      "test": {
+        "latency_ms": 663,
+        "error": "",
+        "success": false,
+        "sample_response": "",
+        "status": "empty_response"
+      },
+      "capabilities": {
+        "max_output_tokens": 16384,
+        "context_length": 1000000,
+        "supports_tools": true,
+        "supports_vision": false
+      },
+      "optimal_parameters": {
+        "max_tokens": 4096,
+        "top_p": 0.9,
+        "tool_choice": "auto",
+        "stream": true,
+        "temperature": 0.2,
+        "response_format": "text"
+      }
+    },
+    {
+      "model": "nemotron-3-ultra",
+      "provider": "nvidia_nim",
+      "tested_at_utc": "2026-06-04T13:15:54.9642040Z",
+      "test": {
+        "latency_ms": 666,
+        "error": "",
+        "success": true,
+        "sample_response": "OK",
+        "status": "ok"
+      },
+      "capabilities": {
+        "max_output_tokens": 16384,
+        "context_length": 128000,
+        "supports_tools": true,
+        "supports_vision": false
+      },
+      "optimal_parameters": {
+        "max_tokens": 4096,
+        "top_p": 0.9,
+        "tool_choice": "auto",
+        "stream": true,
+        "temperature": 0.3,
+        "response_format": "text"
+      }
+    },
+    {
+      "model": "qwen/qwen3-next-80b-a3b-instruct",
+      "provider": "nvidia_nim",
+      "tested_at_utc": "2026-06-04T13:15:55.4540439Z",
+      "test": {
+        "latency_ms": 489,
+        "error": "",
+        "success": true,
+        "sample_response": "OK",
+        "status": "ok"
+      },
+      "capabilities": {
+        "max_output_tokens": 8192,
+        "context_length": 128000,
+        "supports_tools": true,
+        "supports_vision": false
+      },
+      "optimal_parameters": {
+        "max_tokens": 4096,
+        "top_p": 0.9,
+        "tool_choice": "auto",
+        "stream": true,
+        "temperature": 0.3,
+        "response_format": "text"
+      }
+    },
+    {
+      "model": "kimi-k2-thinking",
+      "provider": "nvidia_nim",
+      "tested_at_utc": "2026-06-04T13:15:55.8666690Z",
+      "test": {
+        "latency_ms": 412,
+        "error": "Response status code does not indicate success: 403 (Forbidden).",
+        "success": false,
+        "sample_response": "",
+        "status": "error"
+      },
+      "capabilities": {
+        "max_output_tokens": 8192,
+        "context_length": 128000,
+        "supports_tools": true,
+        "supports_vision": false
+      },
+      "optimal_parameters": {
+        "max_tokens": 4096,
+        "top_p": 0.9,
+        "tool_choice": "auto",
+        "stream": true,
+        "temperature": 0.3,
+        "response_format": "text"
+      }
+    },
+    {
+      "model": "kimi-k2.5",
+      "provider": "nvidia_nim",
+      "tested_at_utc": "2026-06-04T13:15:56.2604862Z",
+      "test": {
+        "latency_ms": 393,
+        "error": "Response status code does not indicate success: 403 (Forbidden).",
+        "success": false,
+        "sample_response": "",
+        "status": "error"
+      },
+      "capabilities": {
+        "max_output_tokens": 8192,
+        "context_length": 128000,
+        "supports_tools": true,
+        "supports_vision": false
+      },
+      "optimal_parameters": {
+        "max_tokens": 4096,
+        "top_p": 0.9,
+        "tool_choice": "auto",
+        "stream": true,
+        "temperature": 0.3,
+        "response_format": "text"
+      }
+    },
+    {
+      "model": "kimi-k2.6",
+      "provider": "nvidia_nim",
+      "tested_at_utc": "2026-06-04T13:15:56.6563900Z",
+      "test": {
+        "latency_ms": 395,
+        "error": "Response status code does not indicate success: 403 (Forbidden).",
+        "success": false,
+        "sample_response": "",
+        "status": "error"
+      },
+      "capabilities": {
+        "max_output_tokens": 8192,
+        "context_length": 128000,
+        "supports_tools": true,
+        "supports_vision": false
+      },
+      "optimal_parameters": {
+        "max_tokens": 4096,
+        "top_p": 0.9,
+        "tool_choice": "auto",
+        "stream": true,
+        "temperature": 0.3,
+        "response_format": "text"
+      }
+    },
+    {
+      "model": "kimi-k2:1t",
+      "provider": "nvidia_nim",
+      "tested_at_utc": "2026-06-04T13:15:57.0255063Z",
+      "test": {
+        "latency_ms": 369,
+        "error": "Response status code does not indicate success: 403 (Forbidden).",
+        "success": false,
+        "sample_response": "",
+        "status": "error"
+      },
+      "capabilities": {
+        "max_output_tokens": 8192,
+        "context_length": 128000,
+        "supports_tools": true,
+        "supports_vision": false
+      },
+      "optimal_parameters": {
+        "max_tokens": 4096,
+        "top_p": 0.9,
+        "tool_choice": "auto",
+        "stream": true,
+        "temperature": 0.3,
+        "response_format": "text"
+      }
+    },
+    {
+      "model": "nvidia/nemotron-3-super-120b-a12b",
+      "provider": "nvidia_nim",
+      "tested_at_utc": "2026-06-04T13:16:12.0321844Z",
+      "test": {
+        "latency_ms": 15009,
+        "error": "The request was canceled due to the configured HttpClient.Timeout of 15 seconds elapsing.",
+        "success": false,
+        "sample_response": "",
+        "status": "error"
+      },
+      "capabilities": {
+        "max_output_tokens": 16384,
+        "context_length": 1000000,
+        "supports_tools": true,
+        "supports_vision": false
+      },
+      "optimal_parameters": {
+        "max_tokens": 4096,
+        "top_p": 0.9,
+        "tool_choice": "auto",
+        "stream": true,
+        "temperature": 0.2,
+        "response_format": "text"
+      }
+    },
+    {
+      "model": "openai/gpt-oss-120b",
+      "provider": "nvidia_nim",
+      "tested_at_utc": "2026-06-04T13:16:16.7353466Z",
+      "test": {
+        "latency_ms": 4703,
+        "error": "",
+        "success": false,
+        "sample_response": "",
+        "status": "empty_response"
+      },
+      "capabilities": {
+        "max_output_tokens": 16384,
+        "context_length": 128000,
+        "supports_tools": true,
+        "supports_vision": false
+      },
+      "optimal_parameters": {
+        "max_tokens": 4096,
+        "top_p": 0.9,
+        "tool_choice": "auto",
+        "stream": true,
+        "temperature": 0.3,
+        "response_format": "text"
+      }
+    },
+    {
+      "model": "nvidia/llama-3.3-nemotron-super-49b-v1.5",
+      "provider": "nvidia_nim",
+      "tested_at_utc": "2026-06-04T13:16:17.2879328Z",
+      "test": {
+        "latency_ms": 552,
+        "error": "",
+        "success": true,
+        "sample_response": "OK",
+        "status": "ok"
+      },
+      "capabilities": {
+        "max_output_tokens": 16384,
+        "context_length": 128000,
+        "supports_tools": true,
+        "supports_vision": false
+      },
+      "optimal_parameters": {
+        "max_tokens": 4096,
+        "top_p": 0.9,
+        "tool_choice": "auto",
+        "stream": true,
+        "temperature": 0.3,
+        "response_format": "text"
+      }
+    }
+  ]
+}

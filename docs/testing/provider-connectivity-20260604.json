@@ -1,0 +1,67 @@
+{
+  "generated_at_utc": "2026-06-04T13:26:19.7827631Z",
+  "proxy_providers": [
+    "nvidia",
+    "openrouter",
+    "groq",
+    "ollama",
+    "deepseek"
+  ],
+  "summary": {
+    "total": 5,
+    "list_ok": 4,
+    "ok_chat": 3
+  },
+  "providers": [
+    {
+      "provider": "deepseek",
+      "configured": false,
+      "list_status": "missing_key",
+      "models_count": 0,
+      "chat_status": "not_tested",
+      "chat_model": "",
+      "latency_ms": 0,
+      "error": "missing key"
+    },
+    {
+      "provider": "groq",
+      "configured": true,
+      "list_status": "ok",
+      "models_count": 16,
+      "chat_status": "ok",
+      "chat_model": "llama-3.3-70b-versatile",
+      "latency_ms": 273,
+      "error": ""
+    },
+    {
+      "provider": "openrouter",
+      "configured": true,
+      "list_status": "ok",
+      "models_count": 343,
+      "chat_status": "ok",
+      "chat_model": "qwen/qwen3.7-plus",
+      "latency_ms": 4076,
+      "error": ""
+    },
+    {
+      "provider": "nvidia",
+      "configured": true,
+      "list_status": "ok",
+      "models_count": 120,
+      "chat_status": "error",
+      "chat_model": "deepseek-ai/deepseek-coder-6.7b-instruct",
+      "latency_ms": 0,
+      "error": "Response status code does not indicate success: 404 (Not Found)."
+    },
+    {
+      "provider": "ollama-cloud",
+      "configured": true,
+      "list_status": "ok",
+      "models_count": 41,
+      "chat_status": "ok",
+      "chat_model": "gpt-oss:120b",
+      "latency_ms": 1016,
+      "error": ""
+    }
+  ]
+}

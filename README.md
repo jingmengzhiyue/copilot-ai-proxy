@@ -1,167 +1,123 @@
-# C# DeepSeek Github Copilot Proxy for Visual Studio 2026 Ollama Provider 
+# Multi-Provider AI Proxy
 
-as of 9. May 2026 use Visual Studio Insider Version
+> The fastest way to run DeepSeek, OpenAI, NVIDIA, Groq, OpenRouter, and Ollama models in GitHub Copilot, VS BYOM, and Ollama clients.
 
-**Why?**
+**As of May 2026** — Tested with Visual Studio 2026 Insider Edition
 
-See 
-DeepSeek V4 AI Beats Billion Dollar Systems…For (almost) Free
+A high-performance, ultra-low-overhead HTTP proxy that connects GitHub Copilot and Ollama clients to **DeepSeek, OpenAI, NVIDIA, Groq, OpenRouter, and Ollama Cloud** APIs. Built with .NET 10 and ASP.NET Core minimal APIs for maximum throughput and minimal allocations.
 
-https://www.youtube.com/watch?v=p7K3xfViWCE
-
-A high-performance, ultra-low-overhead HTTP proxy that connects GitHub Copilot and Ollama clients to the **DeepSeek** API. Built with .NET 10 and ASP.NET Core minimal APIs for maximum throughput and minimal allocations.
-
-| 🏷️ | Details |
+| 🏗️ | Details |
 |---|---|
-| **Author** | iqmeta GmbH — Otto Neff |
-| **Version** | `2026.05.09` |
-| **Model** | `deepseek-v4-flash` (configurable) |
-| **Default Port** | `5000` |
+| **Providers** | DeepSeek, OpenAI, NVIDIA NIM, Groq, OpenRouter, Ollama Cloud |
+| **Models** | Auto-discovered from each provider |
+| **Default Port** | `11434` |
 | **Framework** | .NET 10 |
+| **Tests** | 99 passing ✅ |
+| **Deploy** | Docker / bare metal |
 
----
+## Key Features
 
-## Screenshots
-
-<p align="center">
-  <img src="github_copilot_deepseek_v4-0.jpg" alt="DeepSeek Copilot Proxy Screenshot 1" width="45%" />
-  <img src="github_copilot_deepseek_v4-1.jpg" alt="DeepSeek Copilot Proxy Screenshot 2" width="45%" />
-</p>
-<p align="center">
-  <img src="github_copilot_deepseek_v4-2.jpg" alt="DeepSeek Copilot Proxy Screenshot 3" width="45%" />
-  <img src="github_copilot_deepseek_v4-3.jpg" alt="DeepSeek Copilot Proxy Screenshot 4" width="45%" />
-</p>
-
-
-
-
-
-## Features
-
-- **🧠 Reasoning Content Caching** — Automatically captures DeepSeek's `reasoning_content` from streaming and non-streaming responses, and re-injects it on subsequent assistant messages for true multi-turn reasoning.
+- **🧠 Reasoning Content Caching** — Automatically captures DeepSeek's reasoning_content and re-injects it on subsequent messages for true multi-turn reasoning
+- **🌐 Multi-Provider Support** — Route requests to DeepSeek, OpenAI, NVIDIA, Groq, OpenRouter, or Ollama Cloud based on model name
 - **🔄 Dual API Compatibility**
-  - **OpenAI-compatible** endpoint (`POST /v1/chat/completions`) — works with GitHub Copilot, Cursor, Continue.dev, and any OpenAI SDK.
-  - **Ollama-compatible** endpoints (`GET /api/tags`, `POST /api/chat`) — works with any Ollama client.
-- **⚡ Ultra-Performance** — Uses `SocketsHttpHandler` with connection pooling (256 connections/server, HTTP/2 multiplexing), `SlimBuilder`, and pass-through streaming.
-- **📦 Zero Allocation Streaming** — SSE (Server-Sent Events) are streamed through without buffering, with minimal allocations during parsing.
-- **🔌 No External Dependencies** — Uses only built-in ASP.NET Core and `System.Text.Json`; YARP is included but unused for the core proxy functionality.
-
----
+  - **OpenAI-compatible** (`/v1/chat/completions`) — works with GitHub Copilot, Cursor, Continue.dev, any OpenAI SDK
+  - **Ollama-compatible** (`/api/chat`, `/api/tags`, `/api/show`) — works with VS BYOM and Ollama clients
+- **⚡ Ultra-Performance** — HTTP/2 connection pooling (256 connections/server), zero-copy streaming, minimal allocations
+- **📦 Zero-Copy Streaming** — SSE pass-through without buffering
+- **🔧 No External Dependencies** — Uses only built-in ASP.NET Core and System.Text.Json
+- **🐳 Docker-Ready** — Multi-stage Dockerfile and docker-compose.yml included
+- **🔐 Optional Authentication** — Set `PROXY_API_KEY` to require Bearer token on all endpoints
 
 ## Quick Start
 
 ### Prerequisites
+- [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) or Docker
+- API keys for providers you want to use
 
-- [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)
-- A DeepSeek API key
+### 1. Configure
 
-### 1. Configure API Key
+Copy `.env.example` to `.env` and set your API keys:
 
-Open `Program.cs` and set your DeepSeek API key:
-
-```csharp
-const string API_KEY = "sk-your-deepseek-api-key-here";
+```bash
+cp .env.example .env
+# Edit .env → set PROVIDER_DEEPSEEK_API_KEY=sk-your-key
 ```
 
-You can also change the model and port:
+Key environment variables:
+```
+PROVIDER_DEEPSEEK_API_KEY=sk-...
+PROVIDER_OPENAI_API_KEY=sk-proj-...
+PROVIDER_NVIDIA_API_KEY=nvapi-...
+PROVIDER_GROQ_API_KEY=gsk-...
+PROVIDER_OPENROUTER_API_KEY=sk-or-...
+PROVIDER_OLLAMACLOUD_API_KEY=...
 
-```csharp
-const string MODEL = "deepseek-v4-flash";   // or "deepseek-chat", etc.
-const int PORT = 5000;
+PROXY_PORT=11434                    # (optional)
+DEFAULT_MODEL=deepseek-v4-pro       # (optional)
 ```
 
-### 2. Run
+### 2a. Run with Docker (Recommended)
+
+```bash
+docker compose up -d
+```
+
+### 2b. Run with .NET
 
 ```bash
 dotnet run
 ```
 
-You should see:
+You should see startup output with available providers and models.
+
+## API Reference
+
+### OpenAI-Compatible Endpoints
 
 ```
-╔════════════════════════════════════════╗
-║   DeepSeek Copilot Proxy (Ultra)      ║
-╠════════════════════════════════════════╣
-║  Model:   deepseek-v4-flash            ║
-║  URL:     http://localhost:5000/v1      ║
-╚════════════════════════════════════════╝
+GET  /v1/models                          # List models
+POST /v1/chat/completions                # Chat (streaming or non-streaming)
+GET  /health                             # Health check
 ```
 
----
+### Ollama-Compatible Endpoints
 
-## Endpoints
-
-### Health Check
-
-```http
-GET /health
+```
+GET  /api/version                        # Version info
+GET  /api/tags                           # List models (Ollama format)
+GET  /api/show?model=...                 # Model details
+POST /api/show                           # Model details
+POST /api/chat                           # Chat (Ollama format)
 ```
 
-Response:
-```json
-{ "status": "ok", "model": "deepseek-v4-flash" }
-```
+**[→ Full API Documentation](docs/API.md)**
 
-### List Models (OpenAI-style)
-
-```http
-GET /v1/models
-```
-
-### Chat Completions (OpenAI-style)
-
-```http
-POST /v1/chat/completions
-```
-
-Full OpenAI chat completions API — supports both streaming (`stream: true`) and non-streaming modes. Handles tool calls, multi-turn reasoning, and vision (image) inputs.
-
-### Ollama API
-
-```http
-GET /api/tags
-POST /api/chat
-```
-
-Converts Ollama's message format to OpenAI format transparently and proxies to DeepSeek. Supports `messages`, `tools`, `stream`, and `images` (vision).
-
----
-
-## Configuration Guide
+## Configuration
 
 ### GitHub Copilot
 
-Configure your Copilot client to use the proxy:
+In VS Code settings:
 
 ```json
 {
   "github.copilot.advanced": {
     "debug.chatOverride": {
       "provider": "openai",
-      "endpoint": "http://localhost:5000/v1/chat/completions",
+      "endpoint": "http://localhost:11434/v1/chat/completions",
       "model": "deepseek-v4-flash"
     }
   }
 }
 ```
 
-### Ollama
+### VS 2026 BYOM
 
-Point any Ollama client to the proxy:
-
-```bash
-ollama run deepseek-v4-flash --api http://localhost:5000/api/chat
+Point the Ollama BYOM at:
 ```
-
-Or use the OpenAI compatibility mode with Ollama clients:
-
-```bash
-OLLAMA_HOST=http://localhost:5000 ollama serve
+http://localhost:11434/api/chat
 ```
 
 ### Continue.dev / Cursor
-
-Configure the OpenAI-compatible endpoint:
 
 ```json
 {
@@ -169,71 +125,95 @@ Configure the OpenAI-compatible endpoint:
     "title": "DeepSeek V4",
     "provider": "openai",
     "model": "deepseek-v4-flash",
-    "apiBase": "http://localhost:5000/v1"
+    "apiBase": "http://localhost:11434/v1"
   }]
 }
 ```
 
----
+## Documentation
+
+- **[API.md](docs/API.md)** — Complete endpoint reference with examples
+- **[CONFIGURATION.md](docs/CONFIGURATION.md)** — Setup, providers, parameter mapping, context windows
+- **[ARCHITECTURE.md](docs/ARCHITECTURE.md)** — System design, components, request lifecycle
+- **[TESTING.md](docs/TESTING.md)** — Test architecture, running tests, adding new tests
+- **[DEPLOYMENT.md](docs/DEPLOYMENT.md)** — Docker, Kubernetes, monitoring, troubleshooting
+- **[AGENTS.md](AGENTS.md)** — Quick reference for AI assistants (Copilot, Claude, etc.)
+
+## Performance
+
+- **Connection pooling:** 256 per provider with HTTP/2 multiplexing
+- **Streaming:** Zero-copy pass-through (minimal memory overhead)
+- **Model metadata:** Loaded once on startup, cached in RAM
+- **Typical latency:** <10ms proxy overhead
+- **Test coverage:** 99 tests covering endpoints, parameters, model selection, transformations
+
+## Testing
+
+```bash
+# Run all tests
+dotnet test
+
+# Run specific suite
+dotnet test --filter ClassName=EndpointTests
+
+# Verbose output
+dotnet test --verbosity detailed
+```
+
+**[→ Testing Guide](docs/TESTING.md)**
 
 ## How Reasoning Caching Works
 
-DeepSeek responses include a `reasoning_content` field containing the model's chain-of-thought. This proxy:
+DeepSeek models return `reasoning_content` with their responses. The proxy:
 
-1. **Captures** the reasoning from each assistant response (both streaming and non-streaming).
-2. **Keys** the reasoning by assistant message index or tool call IDs.
-3. **Re-injects** cached reasoning into subsequent assistant messages in the same conversation.
-4. **Preserves existing** `reasoning_content` — if a message already has it, it won't be overwritten.
+1. Captures reasoning from each assistant response
+2. Stores it in `ReasoningCacheService`
+3. Re-injects cached reasoning into subsequent assistant messages in the same conversation
+4. Enables coherent multi-turn reasoning without losing context
 
-This enables coherent multi-turn reasoning conversations without losing context between turns.
+## Provider Support
 
----
+| Provider | Models | Context | Max Output | Tools | Vision |
+|----------|--------|---------|-----------|-------|--------|
+| **DeepSeek** | v4-pro, v4-flash, coder | 1M tokens | 384K | ✅ | ❌ |
+| **OpenAI** | gpt-5, gpt-4o, gpt-4-turbo | 128K | 16K | ✅ | ✅ |
+| **NVIDIA NIM** | llama-3.3-70b, mixtral, nemotron | 128K | 8K | ✅ | ❌ |
+| **Groq** | mixtral-8x7b, llama3-70b | 32K | 8K | ⚠️ | ❌ |
+| **OpenRouter** | All available (100+) | Varies | Varies | Varies | Varies |
+| **Ollama Cloud** | All available | Varies | Varies | Varies | Varies |
 
-## Performance Tuning
+**[→ Configuration Guide](docs/CONFIGURATION.md#context-window-specifications)**
 
-The `SocketsHttpHandler` is configured for maximum throughput:
-
-| Setting | Value | Purpose |
-|---|---|---|
-| `MaxConnectionsPerServer` | 256 | High concurrency |
-| `PooledConnectionLifetime` | 5 min | Connection reuse |
-| `KeepAlivePingDelay` | 30 sec | Keep connections alive |
-| `PooledConnectionIdleTimeout` | 30 sec | Free idle connections |
-| `EnableMultipleHttp2Connections` | `true` | HTTP/2 multiplexing |
-
-Adjust these in `Program.cs` based on your workload.
-
----
-
-## Architecture
+## Architecture Overview
 
 ```
-┌──────────────┐     ┌─────────────────────────────────┐     ┌───────────────┐
-│  Copilot /   │────▶│  DeepSeek Copilot Proxy         │────▶│  api.deepseek │
-│  Ollama CLI  │     │  (localhost:5000)                │     │  .com         │
-│              │◀────│  - Reasoning caching             │◀────│               │
-│              │     │  - Format translation            │     │               │
-│              │     │  - Streaming proxy               │     │               │
-└──────────────┘     └─────────────────────────────────┘     └───────────────┘
+Clients (Copilot, VS BYOM, Ollama)
+    ↓
+Proxy (localhost:11434)
+  ├─ Parameter filtering (RequestTransformer)
+  ├─ Model routing (ProviderRegistry)
+  ├─ Reasoning caching (ReasoningCacheService)
+  ├─ Format conversion (OpenAI ↔ Ollama)
+  └─ Streaming handler (ChatStreamingService)
+    ↓
+Upstream Providers
+  ├─ DeepSeek API
+  ├─ OpenAI API
+  ├─ NVIDIA NIM
+  ├─ Groq API
+  ├─ OpenRouter API
+  └─ Ollama Cloud API
 ```
 
-<p align="center">
-  <img src="github_copilot_deepseek_v4-0.jpg" alt="Architecture overview" width="80%" />
-</p>
-
-The proxy is a single-file .NET application using:
-- `Microsoft.AspNetCore` — Minimal API hosting
-- `System.Text.Json` — JSON parsing with snake_case policy
-- `System.Net.Http.SocketsHttpHandler` — High-performance HTTP transport
-
----
+**[→ Full Architecture](docs/ARCHITECTURE.md)**
 
 ## License
 
 WTFPL (Do What The Fuck You Want To Public License)
 
----
+## Support
 
-## Disclaimer
-
-This is a proxy tool intended for development use. Ensure compliance with DeepSeek's terms of service and your API usage policies.
+For issues, questions, or contributions:
+- Check **[AGENTS.md](AGENTS.md)** for quick reference
+- Review **[TESTING.md](docs/TESTING.md)** for test architecture
+- See **[ARCHITECTURE.md](docs/ARCHITECTURE.md)** for design details
