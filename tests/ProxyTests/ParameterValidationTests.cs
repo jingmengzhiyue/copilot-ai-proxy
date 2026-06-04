@@ -46,7 +46,6 @@ public class ParameterValidationTests
     [Theory]
     [InlineData("deepseek-v4-pro",              "deepseek", true,  false)]
     [InlineData("deepseek-v4-flash",            "deepseek", true,  false)]
-    [InlineData("deepseek-coder-6.7b-instruct", "deepseek", false, true)]
     public void DeepSeek_ReasoningEffortPresenceMatchesModel(
         string model, string provider, bool expectReasoningEffort, bool expectTopP)
     {
@@ -80,18 +79,6 @@ public class ParameterValidationTests
             $"{model}: max_tokens should be injected");
         Assert.True(maxTok.GetInt32() > 0,
             $"{model}: max_tokens must be a positive integer");
-    }
-
-    [Fact]
-    public void DeepSeek_Coder_HasTemperatureAndTopP()
-    {
-        RequestTransformer sut = CreateTransformer();
-        JsonElement result = Transform(sut, "deepseek-coder-6.7b-instruct", "deepseek");
-
-        Assert.True(result.TryGetProperty("temperature", out _),
-            "deepseek-coder: temperature should be injected");
-        Assert.True(result.TryGetProperty("top_p", out _),
-            "deepseek-coder: top_p should be injected");
     }
 
     // ──────────────────────────────────────────────
@@ -356,7 +343,7 @@ public class ParameterValidationTests
     [Theory]
     [InlineData("deepseek-v4-pro",   "deepseek")]
     [InlineData("gpt-5",             "openai")]
-    [InlineData("deepseek-coder-6.7b-instruct", "deepseek")]
+    [InlineData("deepseek-v4-flash", "deepseek")]
     [InlineData("kimi-k2.6",         "moonshot")]
     public void TopK_IsFiltered_ForNonSupportingProviders(string model, string provider)
     {
@@ -419,7 +406,6 @@ public class ParameterValidationTests
     }
 
     [Theory]
-    [InlineData("deepseek-coder-6.7b-instruct", "deepseek")]
     [InlineData("qwen/qwen3.5-397b-a17b",        "nvidia")]
     [InlineData("llama-3.3-70b-versatile",        "groq")]
     [InlineData("kimi-k2.6",                      "moonshot")]
@@ -455,16 +441,15 @@ public class ParameterValidationTests
     // ──────────────────────────────────────────────
 
     [Theory]
-    // DeepSeek (3)
+    // DeepSeek (2 enabled)
     [InlineData("deepseek-v4-pro",              1_048_576, 384_000)]
     [InlineData("deepseek-v4-flash",            1_048_576, 131_072)]
-    [InlineData("deepseek-coder-6.7b-instruct",   128_000,   8_192)]
     // NVIDIA NIM (6)
     [InlineData("deepseek-ai/deepseek-v4-pro",  1_048_576, 384_000)]
     [InlineData("qwen/qwen3-coder-480b-a35b-instruct", 1_048_576, 65_536)]
     [InlineData("qwen/qwen3.5-397b-a17b",          262_144,  16_384)]
     [InlineData("nvidia/nemotron-3-super-120b-a12b", 1_000_000, 262_144)]
-    [InlineData("openai/gpt-oss-120b",             131_072, 131_072)]
+    [InlineData("openai/gpt-oss-120b",             131_072, 16_384)]
     [InlineData("nvidia/llama-3.3-nemotron-super-49b-v1.5", 131_072, 16_384)]
     // OpenAI (4)
     [InlineData("gpt-5",      400_000, 128_000)]
@@ -527,7 +512,6 @@ public class ParameterValidationTests
     [Theory]
     [InlineData("deepseek-v4-pro",   "deepseek")]
     [InlineData("deepseek-v4-flash", "deepseek")]
-    [InlineData("deepseek-coder-6.7b-instruct", "deepseek")]
     [InlineData("deepseek-ai/deepseek-v4-pro",  "nvidia")]
     [InlineData("qwen/qwen3-coder-480b-a35b-instruct", "nvidia")]
     [InlineData("qwen/qwen3.5-397b-a17b",        "nvidia")]
@@ -587,7 +571,7 @@ public class ParameterValidationTests
     // ──────────────────────────────────────────────
 
     [Theory]
-    [InlineData("deepseek", 3)]
+    [InlineData("deepseek", 2)]
     [InlineData("openai", 4)]
     [InlineData("nvidia", 8)]
     [InlineData("groq", 4)]

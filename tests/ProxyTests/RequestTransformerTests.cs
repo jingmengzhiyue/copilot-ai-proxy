@@ -118,6 +118,331 @@ public class RequestTransformerTests
         Assert.Equal(raw, result);
     }
 
+    [Fact]
+    public void ApplyExecutionDefaults_InjectsTemperatureTopPAndMaxTokens()
+    {
+        RequestTransformer sut = CreateTransformer();
+        string raw = """{"messages":[]}""";
+
+        string result = sut.ApplyExecutionDefaults(raw, "deepseek-v4-pro");
+
+        using JsonDocument doc = JsonDocument.Parse(result);
+        JsonElement root = doc.RootElement;
+        Assert.True(root.TryGetProperty("temperature", out JsonElement temp));
+        Assert.Equal(0.2, temp.GetDouble());
+        Assert.True(root.TryGetProperty("max_tokens", out JsonElement maxTok));
+        Assert.Equal(8192, maxTok.GetInt32());
+    }
+
+    [Fact]
+    public void ApplyExecutionDefaults_InjectsReasoningEffortForDeepSeek()
+    {
+        RequestTransformer sut = CreateTransformer();
+        string raw = """{"messages":[]}""";
+
+        string result = sut.ApplyExecutionDefaults(raw, "deepseek-v4-pro", "deepseek");
+
+        using JsonDocument doc = JsonDocument.Parse(result);
+        Assert.Equal("high", doc.RootElement.GetProperty("reasoning_effort").GetString());
+    }
+
+    [Fact]
+    public void ApplyExecutionDefaults_SkipsTopPForNativeReasoner()
+    {
+        RequestTransformer sut = CreateTransformer();
+        string raw = """{"messages":[]}""";
+
+        // deepseek-v4-pro has reasoning_effort configured, so it's a native reasoner
+        string result = sut.ApplyExecutionDefaults(raw, "deepseek-v4-pro", "deepseek");
+
+        // top_p should NOT be injected for native reasoners
+        using JsonDocument doc = JsonDocument.Parse(result);
+        Assert.False(doc.RootElement.TryGetProperty("top_p", out _));
+    }
+
+    [Fact]
+    public void ApplyExecutionDefaults_SkipsTopKForDeepSeekProvider()
+    {
+        RequestTransformer sut = CreateTransformer();
+        string raw = """{"messages":[],"top_k":40}""";
+
+        string result = sut.ApplyExecutionDefaults(raw, "deepseek-v4-pro", "deepseek");
+
+        using JsonDocument doc = JsonDocument.Parse(result);
+        Assert.False(doc.RootElement.TryGetProperty("top_k", out _));
+    }
+
+    [Fact]
+    public void ApplyExecutionDefaults_KeepsTopKForNvidiaProvider()
+    {
+        RequestTransformer sut = CreateTransformer();
+        string raw = """{"messages":[],"top_k":40}""";
+
+        string result = sut.ApplyExecutionDefaults(raw, "some-model", "nvidia");
+
+        using JsonDocument doc = JsonDocument.Parse(result);
+        Assert.True(doc.RootElement.TryGetProperty("top_k", out JsonElement topK));
+        Assert.Equal(40, topK.GetInt32());
+    }
+
+    [Fact]
+    public void ApplyExecutionDefaults_DoesNotInjectReasoningEffortForUnsupportedProvider()
+    {
+        RequestTransformer sut = CreateTransformer();
+        string raw = """{"messages":[]}""";
+
+        string result = sut.ApplyExecutionDefaults(raw, "deepseek-v4-pro", "groq");
+
+        using JsonDocument doc = JsonDocument.Parse(result);
+        Assert.False(doc.RootElement.TryGetProperty("reasoning_effort", out _));
+    }
+
+    [Fact]
+    public void ApplyExecutionDefaults_PreservesExistingProperties()
+    {
+        RequestTransformer sut = CreateTransformer();
+        string raw = """{"messages":[],"temperature":0.9,"custom":"value"}""";
+
+        string result = sut.ApplyExecutionDefaults(raw, "deepseek-v4-pro");
+
+        using JsonDocument doc = JsonDocument.Parse(result);
+        Assert.Equal(0.9, doc.RootElement.GetProperty("temperature").GetDouble());
+        Assert.Equal("value", doc.RootElement.GetProperty("custom").GetString());
+    }
+
+    [Fact]
+    public void ApplyExecutionDefaults_InjectReasoningEffortForOpenAiProvider()
+    {
+        RequestTransformer sut = CreateTransformer();
+        string raw = """{"messages":[]}""";
+
+        string result = sut.ApplyExecutionDefaults(raw, "deepseek-v4-pro", "openai");
+
+        using JsonDocument doc = JsonDocument.Parse(result);
+        Assert.Equal("high", doc.RootElement.GetProperty("reasoning_effort").GetString());
+    }
+
+    [Fact]
+    public void ModifyRequest_ReturnsNullWhenNoMessagesProperty()
+    {
+        RequestTransformer sut = CreateTransformer();
+
+        using JsonDocument request = JsonDocument.Parse("""{"model":"m"}""");
+
+        string? result = sut.ModifyRequest(request);
+
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public void ModifyRequest_ReturnsNullWhenNoAssistantMessages()
+    {
+        RequestTransformer sut = CreateTransformer();
+
+        using JsonDocument request = JsonDocument.Parse("""
+            {
+              "model": "m",
+              "messages": [
+                { "role": "user", "content": "hello" },
+                { "role": "system", "content": "sys" }
+              ]
+            }
+            """);
+
+        string? result = sut.ModifyRequest(request);
+
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public void ModifyRequest_KeepsAssistantWithFunctionCallEvenIfContentEmpty()
+    {
+        RequestTransformer sut = CreateTransformer();
+
+        using JsonDocument request = JsonDocument.Parse("""
+            {
+              "model": "m",
+              "messages": [
+                {
+                  "role": "assistant",
+                  "content": "",
+                  "function_call": { "name": "test", "arguments": "{}" }
+                }
+              ]
+            }
+            """);
+
+        string? result = sut.ModifyRequest(request);
+
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public void ModifyRequest_DoesNotReinjectWhenReasoningContentAlreadyPresent()
+    {
+        RequestTransformer sut = CreateTransformer(out ReasoningCacheService cache);
+        cache.Set("assistant:0", "cached reasoning");
+
+        using JsonDocument request = JsonDocument.Parse("""
+            {
+              "model": "m",
+              "messages": [
+                { "role": "assistant", "content": "hola", "reasoning_content": "already present" }
+              ]
+            }
+            """);
+
+        string? result = sut.ModifyRequest(request);
+
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public void ModifyRequest_InjectsReasoningForToolCallKey()
+    {
+        RequestTransformer sut = CreateTransformer(out ReasoningCacheService cache);
+        cache.Set("toolcall:call_1", "tool reasoning");
+
+        using JsonDocument request = JsonDocument.Parse("""
+            {
+              "model": "m",
+              "messages": [
+                {
+                  "role": "assistant",
+                  "content": "using tool",
+                  "tool_calls": [
+                    { "id": "call_1", "type": "function", "function": { "name": "test" } }
+                  ]
+                }
+              ]
+            }
+            """);
+
+        string? result = sut.ModifyRequest(request);
+
+        Assert.NotNull(result);
+        using JsonDocument modified = JsonDocument.Parse(result!);
+        JsonElement msg = modified.RootElement.GetProperty("messages")[0];
+        Assert.Equal("tool reasoning", msg.GetProperty("reasoning_content").GetString());
+    }
+
+    [Fact]
+    public void ReplaceModelInRequestBody_InvalidJson_ReturnsOriginal()
+    {
+        RequestTransformer sut = CreateTransformer();
+        string raw = "not-json";
+
+        string result = sut.ReplaceModelInRequestBody(raw, "model");
+
+        Assert.Equal(raw, result);
+    }
+
+    [Fact]
+    public void ApplyExecutionDefaults_InvalidJson_ReturnsOriginal()
+    {
+        RequestTransformer sut = CreateTransformer();
+        string raw = "not-json";
+
+        string result = sut.ApplyExecutionDefaults(raw, "deepseek-v4-pro");
+
+        Assert.Equal(raw, result);
+    }
+
+    [Fact]
+    public void ModifyRequest_RemovesAssistantWithNullContent()
+    {
+        RequestTransformer sut = CreateTransformer();
+
+        using JsonDocument request = JsonDocument.Parse("""
+            {
+              "model": "m",
+              "messages": [
+                { "role": "user", "content": "hello" },
+                { "role": "assistant", "content": null }
+              ]
+            }
+            """);
+
+        string? result = sut.ModifyRequest(request);
+
+        Assert.NotNull(result);
+        using JsonDocument modified = JsonDocument.Parse(result!);
+        JsonElement messages = modified.RootElement.GetProperty("messages");
+        Assert.Equal(1, messages.GetArrayLength());
+        Assert.Equal("user", messages[0].GetProperty("role").GetString());
+    }
+
+    [Fact]
+    public void ModifyRequest_RemovesAssistantWithWhitespaceContent()
+    {
+        RequestTransformer sut = CreateTransformer();
+
+        using JsonDocument request = JsonDocument.Parse("""
+            {
+              "model": "m",
+              "messages": [
+                { "role": "user", "content": "hello" },
+                { "role": "assistant", "content": "   " }
+              ]
+            }
+            """);
+
+        string? result = sut.ModifyRequest(request);
+
+        Assert.NotNull(result);
+        using JsonDocument modified = JsonDocument.Parse(result!);
+        JsonElement messages = modified.RootElement.GetProperty("messages");
+        Assert.Equal(1, messages.GetArrayLength());
+    }
+
+    [Fact]
+    public void ModifyRequest_RemovesAssistantWithEmptyArrayContent()
+    {
+        RequestTransformer sut = CreateTransformer();
+
+        using JsonDocument request = JsonDocument.Parse("""
+            {
+              "model": "m",
+              "messages": [
+                { "role": "assistant", "content": [] }
+              ]
+            }
+            """);
+
+        string? result = sut.ModifyRequest(request);
+
+        Assert.NotNull(result);
+        using JsonDocument modified = JsonDocument.Parse(result!);
+        JsonElement messages = modified.RootElement.GetProperty("messages");
+        Assert.Equal(0, messages.GetArrayLength());
+    }
+
+    [Fact]
+    public void ApplyExecutionDefaults_InjectReasoningEffortForUnknownProviderWithReasoningModel()
+    {
+        RequestTransformer sut = CreateTransformer();
+        string raw = """{"messages":[]}""";
+
+        // Unknown provider + model containing "deepseek" should support reasoning_effort
+        string result = sut.ApplyExecutionDefaults(raw, "deepseek-v4-pro", "unknown");
+
+        using JsonDocument doc = JsonDocument.Parse(result);
+        Assert.Equal("high", doc.RootElement.GetProperty("reasoning_effort").GetString());
+    }
+
+    [Fact]
+    public void ApplyExecutionDefaults_DoesNotInjectReasoningEffortForUnknownProviderWithNonReasoningModel()
+    {
+        RequestTransformer sut = CreateTransformer();
+        string raw = """{"messages":[]}""";
+
+        // Unknown provider + non-reasoning model should NOT support reasoning_effort
+        string result = sut.ApplyExecutionDefaults(raw, "llama-3.1", "unknown");
+
+        using JsonDocument doc = JsonDocument.Parse(result);
+        Assert.False(doc.RootElement.TryGetProperty("reasoning_effort", out _));
+    }
+
     private static RequestTransformer CreateTransformer()
     {
         return CreateTransformer(out _);

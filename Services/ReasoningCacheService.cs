@@ -49,7 +49,7 @@ internal sealed class ReasoningCacheService
                     }
                 }
 
-                key = $"toolcall:{string.Join("|", ids)}";
+                key = ids.Count > 0 ? $"toolcall:{string.Join("|", ids)}" : NextAssistantKey();
             }
             else
             {
