@@ -37,7 +37,11 @@ public class ParameterValidationTests
         return JsonDocument.Parse(result).RootElement;
     }
 
-    // ---------- DeepSeek ----------
+    // ──────────────────────────────────────────────
+    // DeepSeek — 3 modelos: v4-pro, v4-flash, coder
+    //   v4-pro / v4-flash: reasoning_effort, NO top_p
+    //   coder: temperature, top_p, NO reasoning_effort
+    // ──────────────────────────────────────────────
 
     [Theory]
     [InlineData("deepseek-v4-pro",              "deepseek", true,  false)]
@@ -90,16 +94,23 @@ public class ParameterValidationTests
             "deepseek-coder: top_p should be injected");
     }
 
-    // ---------- NVIDIA ----------
+    // ──────────────────────────────────────────────
+    // NVIDIA NIM — 6 modelos habilitados
+    //   Ninguno soporta reasoning_effort
+    // ──────────────────────────────────────────────
+
+    public static TheoryData<string> NvidiaModels =>
+    [
+        "deepseek-ai/deepseek-v4-pro",
+        "qwen/qwen3-coder-480b-a35b-instruct",
+        "qwen/qwen3.5-397b-a17b",
+        "nvidia/nemotron-3-super-120b-a12b",
+        "openai/gpt-oss-120b",
+        "nvidia/llama-3.3-nemotron-super-49b-v1.5"
+    ];
 
     [Theory]
-    [InlineData("deepseek-ai/deepseek-v4-pro")]
-    [InlineData("qwen/qwen3-coder-480b-a35b-instruct")]
-    [InlineData("qwen/qwen3.5-397b-a17b")]
-    [InlineData("qwen/qwen3-next-80b-a3b-instruct")]
-    [InlineData("nvidia/nemotron-3-super-120b-a12b")]
-    [InlineData("openai/gpt-oss-120b")]
-    [InlineData("nvidia/llama-3.3-nemotron-super-49b-v1.5")]
+    [MemberData(nameof(NvidiaModels))]
     public void Nvidia_Models_NoReasoningEffortLeakage(string model)
     {
         RequestTransformer sut = CreateTransformer();
@@ -110,13 +121,7 @@ public class ParameterValidationTests
     }
 
     [Theory]
-    [InlineData("deepseek-ai/deepseek-v4-pro")]
-    [InlineData("qwen/qwen3-coder-480b-a35b-instruct")]
-    [InlineData("qwen/qwen3.5-397b-a17b")]
-    [InlineData("qwen/qwen3-next-80b-a3b-instruct")]
-    [InlineData("nvidia/nemotron-3-super-120b-a12b")]
-    [InlineData("openai/gpt-oss-120b")]
-    [InlineData("nvidia/llama-3.3-nemotron-super-49b-v1.5")]
+    [MemberData(nameof(NvidiaModels))]
     public void Nvidia_Models_MaxTokensInjected(string model)
     {
         RequestTransformer sut = CreateTransformer();
@@ -128,7 +133,11 @@ public class ParameterValidationTests
             $"NVIDIA/{model}: max_tokens must be positive");
     }
 
-    // ---------- OpenAI ----------
+    // ──────────────────────────────────────────────
+    // OpenAI — 4 modelos
+    //   gpt-5 / gpt-5-mini: reasoning_effort, NO top_p
+    //   gpt-4.1 / gpt-4o: top_p, NO reasoning_effort
+    // ──────────────────────────────────────────────
 
     [Theory]
     [InlineData("gpt-5")]
@@ -186,7 +195,10 @@ public class ParameterValidationTests
                 $"OpenAI/{model}: top_p must NOT be sent when reasoning_effort is active");
     }
 
-    // ---------- Groq ----------
+    // ──────────────────────────────────────────────
+    // Groq — 2 modelos habilitados
+    //   Ninguno soporta reasoning_effort
+    // ──────────────────────────────────────────────
 
     [Theory]
     [InlineData("llama-3.3-70b-versatile")]
@@ -203,8 +215,6 @@ public class ParameterValidationTests
     [Theory]
     [InlineData("llama-3.3-70b-versatile")]
     [InlineData("qwen/qwen3-32b")]
-    [InlineData("meta-llama/llama-4-scout-17b-16e-instruct")]
-    [InlineData("llama-3.1-8b-instant")]
     public void Groq_Models_MaxTokensInjected(string model)
     {
         RequestTransformer sut = CreateTransformer();
@@ -216,14 +226,14 @@ public class ParameterValidationTests
             $"Groq/{model}: max_tokens must be positive");
     }
 
-    // ---------- OpenRouter ----------
+    // ──────────────────────────────────────────────
+    // OpenRouter — 2 modelos free habilitados
+    //   No inyecta reasoning_effort (passthrough)
+    // ──────────────────────────────────────────────
 
     [Theory]
+    [InlineData("nvidia/nemotron-3-super-120b-a12b:free")]
     [InlineData("qwen/qwen3-coder:free")]
-    [InlineData("moonshotai/kimi-k2.6:free")]
-    [InlineData("qwen/qwen3-next-80b-a3b-instruct:free")]
-    [InlineData("google/gemma-4-31b-it:free")]
-    [InlineData("nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free")]
     public void OpenRouter_Models_NoReasoningEffortLeakage(string model)
     {
         RequestTransformer sut = CreateTransformer();
@@ -233,7 +243,11 @@ public class ParameterValidationTests
             $"OpenRouter/{model}: reasoning_effort must NOT be sent");
     }
 
-    // ---------- Moonshot / Kimi ----------
+    // ──────────────────────────────────────────────
+    // Moonshot / Kimi — 5 modelos habilitados
+    //   Ninguno soporta reasoning_effort
+    //   kimi-k2.6, moonshot-v1-128k/auto/32k/8k
+    // ──────────────────────────────────────────────
 
     [Theory]
     [InlineData("kimi-k2.6")]
@@ -296,7 +310,11 @@ public class ParameterValidationTests
             $"Moonshot/{model}: top_p must be a positive value");
     }
 
-    // ---------- top_k filtering ----------
+    // ──────────────────────────────────────────────
+    // top_k filtering
+    //   Filtered (NO soportan): DeepSeek, OpenAI, Moonshot
+    //   Preserved (SÍ soportan): NVIDIA, Groq, OpenRouter
+    // ──────────────────────────────────────────────
 
     [Theory]
     [InlineData("deepseek-v4-pro",   "deepseek")]
@@ -328,7 +346,9 @@ public class ParameterValidationTests
         Assert.Equal(50, topK.GetInt32());
     }
 
-    // ---------- Provider-agnostic: client-supplied values are never overridden ----------
+    // ──────────────────────────────────────────────
+    // Client-supplied values are never overridden
+    // ──────────────────────────────────────────────
 
     [Theory]
     [InlineData("deepseek-v4-pro",   "deepseek")]
@@ -391,29 +411,33 @@ public class ParameterValidationTests
         Assert.Equal(42, topK.GetInt32());
     }
 
-    // ---------- Context-window config completeness ----------
+    // ──────────────────────────────────────────────
+    // Context-window config completeness
+    //   Verifica que TODOS los modelos habilitados
+    //   tengan context_length y max_output_tokens
+    // ──────────────────────────────────────────────
 
     [Theory]
-    // DeepSeek
+    // DeepSeek (3)
     [InlineData("deepseek-v4-pro",              1_048_576, 384_000)]
     [InlineData("deepseek-v4-flash",            1_048_576, 131_072)]
     [InlineData("deepseek-coder-6.7b-instruct",   128_000,   8_192)]
-    // NVIDIA
+    // NVIDIA NIM (6)
     [InlineData("deepseek-ai/deepseek-v4-pro",  1_048_576, 384_000)]
     [InlineData("qwen/qwen3-coder-480b-a35b-instruct", 1_048_576, 65_536)]
     [InlineData("qwen/qwen3.5-397b-a17b",          262_144,  16_384)]
-    [InlineData("qwen/qwen3-next-80b-a3b-instruct", 262_144,  16_384)]
     [InlineData("nvidia/nemotron-3-super-120b-a12b", 1_000_000, 262_144)]
     [InlineData("openai/gpt-oss-120b",             131_072, 131_072)]
     [InlineData("nvidia/llama-3.3-nemotron-super-49b-v1.5", 131_072, 16_384)]
-    // OpenAI
+    // OpenAI (4)
     [InlineData("gpt-5",      400_000, 128_000)]
     [InlineData("gpt-5-mini", 400_000, 128_000)]
     [InlineData("gpt-4.1",  1_048_576,  32_768)]
     [InlineData("gpt-4o",     128_000,   8_192)]
-    // Groq
-    [InlineData("meta-llama/llama-4-scout-17b-16e-instruct", 10_000_000, 0)]
-    // Moonshot / Kimi
+    // Groq (2)
+    [InlineData("llama-3.3-70b-versatile",   131_072, 32_768)]
+    [InlineData("qwen/qwen3-32b",            131_072, 16_384)]
+    // Moonshot/Kimi (5)
     [InlineData("kimi-k2.6",          262_144, 262_144)]
     [InlineData("moonshot-v1-128k",   128_000,  32_768)]
     [InlineData("moonshot-v1-auto",   128_000,  32_768)]
@@ -438,7 +462,11 @@ public class ParameterValidationTests
         }
     }
 
-    // ---------- DeepSeek reasoning_effort value is valid ----------
+    // ──────────────────────────────────────────────
+    // DeepSeek reasoning_effort value is valid
+    //   API docs: "high" y "max"; proxy usa "low"/"medium"
+    //   mapeados a "high" y "xhigh" a "max"
+    // ──────────────────────────────────────────────
 
     [Theory]
     [InlineData("deepseek-v4-pro")]
@@ -451,23 +479,39 @@ public class ParameterValidationTests
         Assert.False(string.IsNullOrWhiteSpace(exec.ReasoningEffort),
             $"{model}: reasoning_effort should be configured in deepseek.json");
 
-        // DeepSeek API docs: valid values are "high" and "max"
-        // (the proxy maps "low"/"medium" to "high" and "xhigh" to "max")
         string[] valid = ["low", "medium", "high", "default"];
         Assert.Contains(exec.ReasoningEffort, valid);
     }
 
-    // ---------- Temperature sanity bounds ----------
+    // ──────────────────────────────────────────────
+    // Temperature sanity bounds [0.0, 2.0]
+    // ──────────────────────────────────────────────
 
     [Theory]
+    [InlineData("deepseek-v4-pro",   "deepseek")]
+    [InlineData("deepseek-v4-flash", "deepseek")]
     [InlineData("deepseek-coder-6.7b-instruct", "deepseek")]
+    [InlineData("deepseek-ai/deepseek-v4-pro",  "nvidia")]
     [InlineData("qwen/qwen3-coder-480b-a35b-instruct", "nvidia")]
+    [InlineData("qwen/qwen3.5-397b-a17b",        "nvidia")]
+    [InlineData("nvidia/nemotron-3-super-120b-a12b", "nvidia")]
+    [InlineData("openai/gpt-oss-120b",           "nvidia")]
+    [InlineData("nvidia/llama-3.3-nemotron-super-49b-v1.5", "nvidia")]
+    [InlineData("gpt-5",        "openai")]
+    [InlineData("gpt-5-mini",   "openai")]
+    [InlineData("gpt-4.1",      "openai")]
+    [InlineData("gpt-4o",       "openai")]
     [InlineData("llama-3.3-70b-versatile", "groq")]
-    [InlineData("qwen/qwen3-coder:free", "openrouter")]
-    [InlineData("kimi-k2.6", "moonshot")]
+    [InlineData("qwen/qwen3-32b",           "groq")]
+    [InlineData("nvidia/nemotron-3-super-120b-a12b:free", "openrouter")]
+    [InlineData("qwen/qwen3-coder:free",    "openrouter")]
+    [InlineData("kimi-k2.6",    "moonshot")]
+    [InlineData("moonshot-v1-128k", "moonshot")]
+    [InlineData("moonshot-v1-32k",  "moonshot")]
+    [InlineData("moonshot-v1-8k",   "moonshot")]
     public void ConfiguredTemperature_IsWithinValidRange(string model, string provider)
     {
-        _ = provider; // documented for readability
+        _ = provider;
         ModelSelectionStore  store = new();
         ModelExecutionConfig exec  = store.GetExecutionConfigForModel(model, new Dictionary<string, ProviderInfo>());
 
@@ -478,7 +522,9 @@ public class ParameterValidationTests
             $"{model}: temperature {t} is outside [0, 2.0]");
     }
 
-    // ---------- All config files have non-empty model lists ----------
+    // ──────────────────────────────────────────────
+    // All provider config files exist and have models
+    // ──────────────────────────────────────────────
 
     [Fact]
     public void AllProviderConfigFiles_HaveAtLeastOneModel()
@@ -496,5 +542,25 @@ public class ParameterValidationTests
                 $"Missing provider config: {name}");
             Assert.NotEmpty(providers[name]);
         }
+    }
+
+    // ──────────────────────────────────────────────
+    // Enabled model count per provider
+    //   Verifica que los modelos correctos están enabled
+    // ──────────────────────────────────────────────
+
+    [Theory]
+    [InlineData("deepseek", 3)]
+    [InlineData("openai", 4)]
+    [InlineData("nvidia", 6)]
+    [InlineData("groq", 2)]
+    [InlineData("openrouter", 2)]
+    [InlineData("moonshot", 5)]
+    public void EnabledModelCount_IsCorrect(string providerName, int expectedEnabled)
+    {
+        ModelSelectionStore store = new();
+        var entries = store.GetProviderModelSelections(providerName);
+        int enabled = entries.Count(e => e.Enabled);
+        Assert.Equal(expectedEnabled, enabled);
     }
 }
