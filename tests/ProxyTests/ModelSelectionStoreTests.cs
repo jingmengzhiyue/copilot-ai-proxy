@@ -121,7 +121,7 @@ public class ModelSelectionStoreTests
         Assert.True(store.ProviderModelSelections.ContainsKey("groq"));
         Assert.True(store.ProviderModelSelections.ContainsKey("moonshot"));
         Assert.True(store.ProviderModelSelections.ContainsKey("openrouter"));
-        Assert.True(store.ProviderModelSelections.ContainsKey("ollamacloud"));
+        Assert.True(store.ProviderModelSelections.ContainsKey("ollama"));
     }
 
     [Fact]
@@ -129,7 +129,7 @@ public class ModelSelectionStoreTests
     {
         ModelSelectionStore store = new();
 
-        ModelSelectionEntry[] entries = store.GetProviderModelSelections("ollamacloud");
+        ModelSelectionEntry[] entries = store.GetProviderModelSelections("ollama");
 
         Assert.NotEmpty(entries);
         Assert.Equal(10, entries.Length);
@@ -140,7 +140,7 @@ public class ModelSelectionStoreTests
     {
         ModelSelectionStore store = new();
 
-        ModelSelectionEntry? entry = store.FindModelSelectionEntry("glm-5.1", "ollamacloud");
+        ModelSelectionEntry? entry = store.FindModelSelectionEntry("glm-5.1", "ollama");
 
         Assert.NotNull(entry);
         Assert.Equal("glm-5.1", entry.Value.Match);
@@ -152,7 +152,7 @@ public class ModelSelectionStoreTests
     {
         ModelSelectionStore store = new();
 
-        ModelSelectionEntry? entry = store.FindModelSelectionEntry("qwen3-vl:235b", "ollamacloud");
+        ModelSelectionEntry? entry = store.FindModelSelectionEntry("qwen3-vl:235b", "ollama");
 
         Assert.NotNull(entry);
         Assert.Equal("qwen3-vl:235b", entry.Value.Match);
@@ -203,7 +203,7 @@ public class ModelSelectionStoreTests
     {
         ModelSelectionStore store = new();
 
-        bool isPreferred = store.IsPreferredModel("glm-5", "ollamacloud");
+        bool isPreferred = store.IsPreferredModel("glm-5", "ollama");
 
         Assert.True(isPreferred);
     }
@@ -213,7 +213,7 @@ public class ModelSelectionStoreTests
     {
         ModelSelectionStore store = new();
 
-        int priority = store.GetPreferredModelPriority("mistral-large-3:675b", "ollamacloud");
+        int priority = store.GetPreferredModelPriority("mistral-large-3:675b", "ollama");
 
         Assert.Equal(3, priority);
     }

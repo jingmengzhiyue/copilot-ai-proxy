@@ -1,5 +1,5 @@
 {
-  "provider": "ollamacloud",
+  "provider": "ollama",
   "models": [
     {
       "match": "glm-5.1",
