@@ -67,7 +67,7 @@ public class ModelSelectionStoreTests
         ModelSelectionEntry? entry = store.FindModelSelectionEntry("deepseek-v4-pro", "deepseek");
 
         Assert.NotNull(entry);
-        Assert.Equal("deepseek-v4-pro", entry.Id);
+        Assert.Equal("deepseek-v4-pro", entry.Value.Match);
     }
 
     [Fact]
@@ -121,6 +121,101 @@ public class ModelSelectionStoreTests
         Assert.True(store.ProviderModelSelections.ContainsKey("groq"));
         Assert.True(store.ProviderModelSelections.ContainsKey("moonshot"));
         Assert.True(store.ProviderModelSelections.ContainsKey("openrouter"));
+        Assert.True(store.ProviderModelSelections.ContainsKey("ollamacloud"));
+    }
+
+    [Fact]
+    public void GetProviderModelSelections_OllamaCloud_ReturnsTenEntries()
+    {
+        ModelSelectionStore store = new();
+
+        ModelSelectionEntry[] entries = store.GetProviderModelSelections("ollamacloud");
+
+        Assert.NotEmpty(entries);
+        Assert.Equal(10, entries.Length);
+    }
+
+    [Fact]
+    public void FindModelSelectionEntry_OllamaCloud_Glm51_FindsEntry()
+    {
+        ModelSelectionStore store = new();
+
+        ModelSelectionEntry? entry = store.FindModelSelectionEntry("glm-5.1", "ollamacloud");
+
+        Assert.NotNull(entry);
+        Assert.Equal("glm-5.1", entry.Value.Match);
+        Assert.Equal(1, entry.Value.Priority);
+    }
+
+    [Fact]
+    public void FindModelSelectionEntry_OllamaCloud_Qwen3Vl_FindsEntry()
+    {
+        ModelSelectionStore store = new();
+
+        ModelSelectionEntry? entry = store.FindModelSelectionEntry("qwen3-vl:235b", "ollamacloud");
+
+        Assert.NotNull(entry);
+        Assert.Equal("qwen3-vl:235b", entry.Value.Match);
+        Assert.True(entry.Value.Execution.SupportsVision);
+    }
+
+    [Fact]
+    public void GetExecutionConfigForModel_OllamaCloud_Glm51_HasContextLength128K()
+    {
+        ModelSelectionStore store = new();
+        ProviderHttpClientFactory factory = new();
+        ProviderRegistry registry = new(factory);
+
+        ModelExecutionConfig config = store.GetExecutionConfigForModel("glm-5.1", registry.ModelToProvider);
+
+        Assert.True(config.ContextLength.HasValue);
+        Assert.Equal(128_000, config.ContextLength.Value);
+    }
+
+    [Fact]
+    public void GetExecutionConfigForModel_OllamaCloud_NemotronSuper_HasContextLength1M()
+    {
+        ModelSelectionStore store = new();
+        ProviderHttpClientFactory factory = new();
+        ProviderRegistry registry = new(factory);
+
+        ModelExecutionConfig config = store.GetExecutionConfigForModel("nemotron-3-super", registry.ModelToProvider);
+
+        Assert.True(config.ContextLength.HasValue);
+        Assert.Equal(1_048_576, config.ContextLength.Value);
+    }
+
+    [Fact]
+    public void GetExecutionConfigForModel_OllamaCloud_Cogito_HasReasoningTemperature()
+    {
+        ModelSelectionStore store = new();
+        ProviderHttpClientFactory factory = new();
+        ProviderRegistry registry = new(factory);
+
+        ModelExecutionConfig config = store.GetExecutionConfigForModel("cogito-2.1:671b", registry.ModelToProvider);
+
+        Assert.True(config.Temperature.HasValue);
+        Assert.Equal(0.6, config.Temperature.Value);
+    }
+
+    [Fact]
+    public void IsPreferredModel_OllamaCloud_Glm5_ReturnsTrue()
+    {
+        ModelSelectionStore store = new();
+
+        bool isPreferred = store.IsPreferredModel("glm-5", "ollamacloud");
+
+        Assert.True(isPreferred);
+    }
+
+    [Fact]
+    public void GetPreferredModelPriority_OllamaCloud_MistralLarge3_ReturnsPriority3()
+    {
+        ModelSelectionStore store = new();
+
+        int priority = store.GetPreferredModelPriority("mistral-large-3:675b", "ollamacloud");
+
+        Assert.Equal(3, priority);
     }
 
     [Fact]
