@@ -9,7 +9,19 @@ if (!File.Exists(envPath))
 if (File.Exists(envPath))
 {
     Console.WriteLine($"📄 Cargando configuración desde: {envPath}");
-    DotNetEnv.Env.Load(envPath);
+    foreach (string line in File.ReadAllLines(envPath))
+    {
+        string trimmed = line.Trim();
+        if (trimmed.Length == 0 || trimmed.StartsWith("#"))
+            continue;
+        int eq = trimmed.IndexOf('=');
+        if (eq < 1)
+            continue;
+        string key = trimmed[..eq].Trim();
+        string value = trimmed[(eq + 1)..].Trim().Trim('"');
+        if (!string.IsNullOrEmpty(key))
+            Environment.SetEnvironmentVariable(key, value);
+    }
 }
 
 WebApplicationBuilder builder = WebApplication.CreateSlimBuilder(args);
