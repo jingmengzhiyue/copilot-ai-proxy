@@ -2,11 +2,11 @@
   "profiles": {
     "vs2026-copilot-deepseek-v4": {
       "commandName": "Project",
-      "launchBrowser": true,
       "environmentVariables": {
-        "ASPNETCORE_ENVIRONMENT": "Development"
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "PROXY_PORT": "11343"
       },
-      "applicationUrl": "https://localhost:64881;http://localhost:64882"
+      "applicationUrl": "http://localhost:11343"
     }
   }
 }

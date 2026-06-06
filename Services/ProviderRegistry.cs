@@ -12,8 +12,16 @@ internal sealed class ProviderRegistry
 
         if (_providers.Count == 0)
         {
-            throw new InvalidOperationException(
-                "No AI provider configured. Set PROVIDER_<NAME>_API_KEY (e.g. PROVIDER_DEEPSEEK_API_KEY) or DEEPSEEK_API_KEY.");
+            Console.WriteLine("╔══════════════════════════════════════════════════════════════════╗");
+            Console.WriteLine("║  ⚠️  No se encontraron API keys configuradas.                    ║");
+            Console.WriteLine("║                                                                  ║");
+            Console.WriteLine("║  Edita el archivo .env en la raíz del proyecto y descomenta     ║");
+            Console.WriteLine("║  al menos un proveedor, por ejemplo:                            ║");
+            Console.WriteLine("║                                                                  ║");
+            Console.WriteLine("║    PROVIDER_DEEPSEEK_API_KEY=sk-tu-key-aqui                      ║");
+            Console.WriteLine("║                                                                  ║");
+            Console.WriteLine("║  Luego reinicia la aplicación.                                   ║");
+            Console.WriteLine("╚══════════════════════════════════════════════════════════════════╝");
         }
     }
 
@@ -69,15 +77,23 @@ internal sealed class ProviderRegistry
         _upstreamToProviders = upstream;
     }
 
-    internal ProviderInfo ResolveProvider(string? requestedModel) =>
-        !string.IsNullOrWhiteSpace(requestedModel) && _modelToProvider.TryGetValue(requestedModel, out ProviderInfo provider)
+    internal ProviderInfo? ResolveProvider(string? requestedModel)
+    {
+        if (_providers.Count == 0)
+            return null;
+        return !string.IsNullOrWhiteSpace(requestedModel) && _modelToProvider.TryGetValue(requestedModel, out ProviderInfo provider)
             ? provider
             : _providers[0];
+    }
 
-    internal string ResolveModel(string? requestedModel) =>
-        !string.IsNullOrWhiteSpace(requestedModel) && _modelToProvider.ContainsKey(requestedModel)
+    internal string ResolveModel(string? requestedModel)
+    {
+        if (_providers.Count == 0)
+            return DefaultModel;
+        return !string.IsNullOrWhiteSpace(requestedModel) && _modelToProvider.ContainsKey(requestedModel)
             ? requestedModel
             : DefaultModel;
+    }
 
     internal string ResolveUpstreamModel(string? requestedModel)
     {
@@ -107,7 +123,8 @@ internal sealed class ProviderRegistry
             return providers.Select(p => (p, upstream)).ToArray();
         }
 
-        return [(ResolveProvider(resolved), upstream)];
+        ProviderInfo? fallback = ResolveProvider(resolved);
+        return fallback is not null ? [((ProviderInfo)fallback, upstream)] : [];
     }
 
     private void DiscoverProviders(ProviderHttpClientFactory httpClientFactory)

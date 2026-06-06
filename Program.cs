@@ -1,5 +1,17 @@
 [assembly: System.Runtime.CompilerServices.InternalsVisibleTo("ProxyTests")]
 
+// Cargar .env automáticamente si existe
+string envPath = Path.Combine(AppContext.BaseDirectory, ".env");
+if (!File.Exists(envPath))
+{
+    envPath = Path.Combine(Directory.GetCurrentDirectory(), ".env");
+}
+if (File.Exists(envPath))
+{
+    Console.WriteLine($"📄 Cargando configuración desde: {envPath}");
+    DotNetEnv.Env.Load(envPath);
+}
+
 WebApplicationBuilder builder = WebApplication.CreateSlimBuilder(args);
 
 int port = int.TryParse(Environment.GetEnvironmentVariable("PROXY_PORT"), out int p) ? p : 11434;
