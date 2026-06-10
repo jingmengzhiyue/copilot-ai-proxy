@@ -73,7 +73,7 @@ internal static class OpenAiEndpoints
 
                         using StringContent content = new(candidateBody, Encoding.UTF8, "application/json");
                         HttpResponseMessage response = await candidateProvider.Client.SendAsync(
-                            new HttpRequestMessage(HttpMethod.Post, "/v1/chat/completions") { Content = content },
+                            new HttpRequestMessage(HttpMethod.Post, "v1/chat/completions") { Content = content },
                             requestCt);
 
                         string respBody = await response.Content.ReadAsStringAsync(ct);
@@ -126,7 +126,7 @@ internal static class OpenAiEndpoints
             ctx.Response.Headers["X-Accel-Buffering"] = "no";
 
             using StringContent reqContent = new(bodyText, Encoding.UTF8, "application/json");
-            using HttpRequestMessage upstreamReq = new(HttpMethod.Post, "/v1/chat/completions")
+            using HttpRequestMessage upstreamReq = new(HttpMethod.Post, "v1/chat/completions")
             {
                 Content = reqContent
             };
@@ -167,7 +167,7 @@ internal static class OpenAiEndpoints
 
         using StringContent content = new(ollamaRequestBody, Encoding.UTF8, "application/json");
         using HttpResponseMessage response = await provider.Client.SendAsync(
-            new HttpRequestMessage(HttpMethod.Post, "/api/chat") { Content = content },
+            new HttpRequestMessage(HttpMethod.Post, "api/chat") { Content = content },
             requestCt);
 
         string respBody = await response.Content.ReadAsStringAsync(clientCt);
@@ -195,7 +195,7 @@ internal static class OpenAiEndpoints
 
         using StringContent content = new(ollamaRequestBody, Encoding.UTF8, "application/json");
         using HttpResponseMessage response = await provider.Client.SendAsync(
-            new HttpRequestMessage(HttpMethod.Post, "/api/chat") { Content = content },
+            new HttpRequestMessage(HttpMethod.Post, "api/chat") { Content = content },
             requestCt);
 
         string respBody = await response.Content.ReadAsStringAsync(clientCt);
