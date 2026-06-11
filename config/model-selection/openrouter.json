@@ -80,6 +80,22 @@
         "reasoning_effort": "high",
         "timeout_seconds": 180
       }
+    },
+    {
+      "match": "qwen/qwen3.7-plus",
+      "priority": 6,
+      "enabled": true,
+      "execution": {
+        "context_length": 1000000,
+        "max_output_tokens": 65536,
+        "supports_tools": true,
+        "supports_vision": true,
+        "family": "qwen",
+        "temperature": 0.15,
+        "top_p": 0.95,
+        "max_tokens": 8192,
+        "timeout_seconds": 180
+      }
     }
   ]
 }

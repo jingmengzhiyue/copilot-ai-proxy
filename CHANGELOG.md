@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026-06-11 — Add Qwen 3.7 Plus (OpenRouter), restore provider prefix in /api/tags
+
+### Added
+- **Qwen 3.7 Plus** (`qwen/qwen3.7-plus`) on OpenRouter: 1M context, vision + tools support, priority 6
+- **Provider prefix in /api/tags**: models now display as `PROVEEDOR - modelo` (e.g. `OPENROUTER - qwen3.7-plus:latest`) for better BYOM discoverability in VS 2026
+
+### Changed
+- **config/model-selection/openrouter.json**: added qwen3.7-plus entry with `context_length: 1000000`, `max_output_tokens: 65536`, `supports_vision: true`
+- **Endpoints/OllamaEndpoints.cs**: restored provider prefix + deduplication logic that was lost in a merge conflict
+- **Tests**: updated OpenRouter enabled model count (5→6)
+
+### Fixed
+- **Merge conflict resolution**: the `/api/tags` endpoint was reverted to the pre-prefix version after merging `feature/model-list-provider-prefix-order` into `develop`. Provider prefixes and deduplication logic are now restored.
+
 ## 2026-06-11 — Provider optimization, dedup, and comprehensive stress testing
 
 ### Added

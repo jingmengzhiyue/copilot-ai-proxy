@@ -127,7 +127,7 @@ Each provider exposes **5 enabled models maximum** (DeepSeek and Cerebras expose
 | OpenAI | gpt-5, gpt-5-mini, gpt-4.1, gpt-4o, gpt-oss-120b |
 | NVIDIA NIM | qwen3-coder-480b, moonshotai/kimi-k2.6, nemotron-3-super-120b, openai/gpt-oss-120b, qwen3.5-397b |
 | Groq | llama-3.3-70b-versatile, qwen3-32b, llama-4-scout-17b, gpt-oss-120b, gpt-oss-20b |
-| OpenRouter | qwen3-coder, nemotron-3-super, nemotron-3-ultra, kimi-k2.6, deepseek-v4-pro |
+| OpenRouter | qwen3-coder, nemotron-3-super, nemotron-3-ultra, kimi-k2.6, deepseek-v4-pro, qwen3.7-plus |
 | Moonshot | kimi-k2.6, kimi-k2.5, moonshot-v1-{128k,auto,32k} |
 | Cerebras | zai-glm-4.7, gpt-oss-120b |
 | Ollama Cloud | qwen3-coder:480b, qwen3-coder-next, devstral-2:123b, kimi-k2.6, deepseek-v4-pro |

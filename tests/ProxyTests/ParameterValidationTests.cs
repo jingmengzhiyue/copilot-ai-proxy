@@ -540,7 +540,7 @@ public class ParameterValidationTests
     [InlineData("openai", 5)]        // gpt-5, gpt-5-mini, gpt-4.1, gpt-4o, gpt-oss-120b
     [InlineData("nvidia", 5)]
     [InlineData("groq", 5)]
-    [InlineData("openrouter", 5)]
+    [InlineData("openrouter", 6)]
     [InlineData("moonshot", 5)]
     [InlineData("cerebras", 2)]
     [InlineData("ollama", 8)]        // 7 ollamacloud + 1 ollama.json (mistral)
