@@ -16,6 +16,7 @@ public class ProviderRegistryTests
 
         ProviderInfo result = registry.ResolveProvider(null);
 
+        
         Assert.Equal("deepseek", result.Name);
     }
 
@@ -27,6 +28,7 @@ public class ProviderRegistryTests
 
         ProviderInfo result = registry.ResolveProvider("");
 
+        
         Assert.Equal("deepseek", result.Name);
     }
 
@@ -90,6 +92,7 @@ public class ProviderRegistryTests
         registry.UpdateModelMappings(newMap, newUpstream);
 
         ProviderInfo result = registry.ResolveProvider("custom-model");
+        
         Assert.Equal("groq", result.Name);
     }
 

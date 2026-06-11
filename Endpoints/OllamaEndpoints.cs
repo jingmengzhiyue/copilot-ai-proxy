@@ -125,7 +125,7 @@ internal static class OllamaEndpoints
                 ? om.GetString()! : providerRegistry.DefaultModel;
             string ollamaEffectiveModel = providerRegistry.ResolveModel(ollamaRequestedModel);
             string ollamaUpstreamModel = providerRegistry.ResolveUpstreamModel(ollamaEffectiveModel);
-            ProviderInfo ollamaProvider = providerRegistry.ResolveProvider(ollamaEffectiveModel) ?? throw new InvalidOperationException("No providers configured");
+            ProviderInfo ollamaProvider = providerRegistry.ResolveProvider(ollamaEffectiveModel);
             ModelExecutionConfig ollamaExec = modelCatalog.GetExecutionConfigForModel(ollamaEffectiveModel);
 
             using CancellationTokenSource? ollamaTimeoutCts = modelCatalog.CreateModelTimeoutCts(ollamaEffectiveModel, ct);

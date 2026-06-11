@@ -202,41 +202,44 @@ public class ModelCatalogServiceTests : IDisposable
     [Fact]
     public async Task GptOss120b_OfferedByNvidiaGroqOllama_ClaimsLowestPriority()
     {
-        // Live JSON priorities:
-        //   nvidia.json p7 (match "openai/gpt-oss-120b"), groq.json p4 (same match).
-        //   ollama.json p1 (match "gpt-oss" — its upstream id is the bare "gpt-oss-120b").
-        // So the shared upstream id "openai/gpt-oss-120b" is offered by nvidia and groq,
-        // and ollama's "gpt-oss-120b" is a separate upstream that ollama wins by default.
+        // Live JSON priorities after the 2026-06-10 curation:
+        //   nvidia.json p4 (match "openai/gpt-oss-120b", upstream "openai/gpt-oss-120b").
+        //   groq.json   p4 (match "openai/gpt-oss-120b", upstream "openai/gpt-oss-120b").
+        //   ollama.json match "gpt-oss" is DISABLED — ollama is no longer a claimant for
+        //   any "gpt-oss-120b" upstream id, so we don't even ask the fake handler for one.
+        // Tie-break: nvidia wins over groq because ProviderRegistry discovery order
+        // (deepseek, openai, nvidia, openrouter, groq, …) places nvidia before groq.
         (ModelCatalogService catalog, ProviderRegistry registry, _) =
             BuildCatalog(
                 new Dictionary<string, string[]>
                 {
                     ["nvidia"] = ["openai/gpt-oss-120b"],
                     ["groq"] = ["openai/gpt-oss-120b"],
-                    ["ollama"] = ["gpt-oss-120b"],
                 },
                 ollamaProviders: ["ollama"]);
 
         await catalog.RefreshAvailableModels(CancellationToken.None);
 
-        // Shared upstream: groq wins (p4) over nvidia (p7).
-        Assert.Equal("groq", registry.ResolveProvider("openai/gpt-oss-120b").Name);
-        Assert.Equal("groq", registry.ModelToProvider["openai/gpt-oss-120b"].Name);
+        // Shared upstream: nvidia wins (p4) over groq (p4) via provider discovery order.
+        Assert.Equal("nvidia", registry.ResolveProvider("openai/gpt-oss-120b").Name);
+        Assert.Equal("nvidia", registry.ModelToProvider["openai/gpt-oss-120b"].Name);
 
         // Both claimants get qualified aliases.
         Assert.Equal("nvidia", registry.ModelToProvider["openai/gpt-oss-120b@nvidia"].Name);
         Assert.Equal("groq", registry.ModelToProvider["openai/gpt-oss-120b@groq"].Name);
 
-        // Failover: groq (p4) first, then nvidia (p7).
+        // Failover: nvidia (p4) first, then groq (p4) — same priority, registry order breaks tie.
         IReadOnlyList<(ProviderInfo Provider, string UpstreamModel)> cands =
             registry.ResolveCandidates("openai/gpt-oss-120b");
         Assert.Equal(2, cands.Count);
-        Assert.Equal("groq", cands[0].Provider.Name);
-        Assert.Equal("nvidia", cands[1].Provider.Name);
+        Assert.Equal("nvidia", cands[0].Provider.Name);
+        Assert.Equal("groq", cands[1].Provider.Name);
 
-        // Ollama-only "gpt-oss-120b" stays on ollama.
-        Assert.Equal("ollama", registry.ResolveProvider("gpt-oss-120b").Name);
-        Assert.Equal("ollama", registry.ModelToProvider["gpt-oss-120b"].Name);
+        // The bare "gpt-oss-120b" (no upstream prefix) is NOT exposed by anyone:
+        //   - nvidia's upstream id is "openai/gpt-oss-120b" (not the bare name).
+        //   - groq's upstream id is the same.
+        //   - ollama's "gpt-oss" match is disabled, so ollama doesn't claim the bare id.
+        Assert.False(registry.ModelToProvider.ContainsKey("gpt-oss-120b"));
     }
 
     [Fact]

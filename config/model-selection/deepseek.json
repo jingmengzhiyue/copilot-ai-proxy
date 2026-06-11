@@ -18,24 +18,8 @@
       }
     },
     {
-      "match": "deepseek-v4-flash",
-      "priority": 2,
-      "enabled": true,
-      "execution": {
-        "context_length": 1048576,
-        "max_output_tokens": 131072,
-        "supports_tools": true,
-        "supports_vision": false,
-        "family": "deepseek",
-        "temperature": 0.2,
-        "max_tokens": 4096,
-        "reasoning_effort": "medium",
-        "timeout_seconds": 90
-      }
-    },
-    {
       "match": "deepseek-coder-6.7b-instruct",
-      "priority": 3,
+      "priority": 2,
       "enabled": true,
       "execution": {
         "context_length": 128000,
@@ -48,6 +32,22 @@
         "max_tokens": 4096,
         "reasoning_effort": "low",
         "timeout_seconds": 60
+      }
+    },
+    {
+      "match": "deepseek-v4-flash",
+      "priority": 3,
+      "enabled": false,
+      "execution": {
+        "context_length": 1048576,
+        "max_output_tokens": 131072,
+        "supports_tools": true,
+        "supports_vision": false,
+        "family": "deepseek",
+        "temperature": 0.2,
+        "max_tokens": 4096,
+        "reasoning_effort": "medium",
+        "timeout_seconds": 90
       }
     }
   ]

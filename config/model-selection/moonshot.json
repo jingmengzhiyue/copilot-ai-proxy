@@ -15,7 +15,8 @@
         "temperature": 1.0,
         "top_p": 0.95,
         "max_tokens": 4096,
-        "timeout_seconds": 60
+        "timeout_seconds": 60,
+        "override_client_params": true
       }
     },
     {
@@ -32,13 +33,14 @@
         "temperature": 1.0,
         "top_p": 0.95,
         "max_tokens": 4096,
-        "timeout_seconds": 60
+        "timeout_seconds": 60,
+        "override_client_params": true
       }
     },
     {
       "match": "moonshot-v1-128k",
       "priority": 3,
-      "enabled": false,
+      "enabled": true,
       "execution": {
         "context_length": 131072,
         "max_output_tokens": 32768,
@@ -54,7 +56,7 @@
     {
       "match": "moonshot-v1-auto",
       "priority": 4,
-      "enabled": false,
+      "enabled": true,
       "execution": {
         "context_length": 131072,
         "max_output_tokens": 32768,
@@ -70,7 +72,7 @@
     {
       "match": "moonshot-v1-32k",
       "priority": 5,
-      "enabled": false,
+      "enabled": true,
       "execution": {
         "context_length": 32768,
         "max_output_tokens": 8192,

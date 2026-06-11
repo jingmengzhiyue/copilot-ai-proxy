@@ -77,13 +77,13 @@ internal sealed class ProviderRegistry
         _upstreamToProviders = upstream;
     }
 
-    internal ProviderInfo? ResolveProvider(string? requestedModel)
+    internal ProviderInfo ResolveProvider(string? requestedModel)
     {
         if (_providers.Count == 0)
-            return null;
-        return !string.IsNullOrWhiteSpace(requestedModel) && _modelToProvider.TryGetValue(requestedModel, out ProviderInfo provider)
-            ? provider
-            : _providers[0];
+            throw new InvalidOperationException("ProviderRegistry: no providers are registered (check PROVIDER_*_API_KEY env vars).");
+        if (!string.IsNullOrWhiteSpace(requestedModel) && _modelToProvider.TryGetValue(requestedModel, out ProviderInfo provider))
+            return provider;
+        return _providers[0];
     }
 
     internal string ResolveModel(string? requestedModel)
@@ -98,15 +98,40 @@ internal sealed class ProviderRegistry
             if (_modelToProvider.ContainsKey(cleanModel))
                 return cleanModel;
 
-            // Accept the OpenAI-style "provider/model" form (e.g. "groq/llama-3.3-70b-versatile")
-            // which /v1/models announces. Reduce to the bare upstream id the routing layer
-            // actually stores.
+            // Accept the OpenAI-style "provider/model" form (e.g. "groq/llama-3.3-70b-versatile"
+            // or "nvidia/qwen3.5-397b-a17b"). Some providers (NVIDIA in particular) expose
+            // upstream ids with a slash prefix ("qwen/qwen3.5-397b-a17b"), so first try the
+            // full id verbatim, then fall back to stripping the provider prefix, and finally
+            // try matching the requested bare against any upstream id owned by the hinted
+            // provider that ends with that bare.
             int slash = cleanModel.IndexOf('/');
             if (slash > 0 && slash < cleanModel.Length - 1)
             {
+                if (_modelToProvider.ContainsKey(cleanModel))
+                    return cleanModel;
+
                 string bare = cleanModel[(slash + 1)..];
                 if (_modelToProvider.ContainsKey(bare))
                     return bare;
+
+                // Last-resort match: look for any upstream id in the hinted provider
+                // whose suffix equals the requested bare (e.g. requested bare
+                // "qwen3.5-397b-a17b" matches upstream "qwen/qwen3.5-397b-a17b").
+                string? providerHint = cleanModel[..slash];
+                if (_modelToProvider.TryGetValue(bare, out _))
+                {
+                    return bare; // unreachable, but keeps the flow explicit
+                }
+
+                foreach (KeyValuePair<string, ProviderInfo> kv in _modelToProvider)
+                {
+                    if (!string.Equals(kv.Value.Name, providerHint, StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    int lastSlash = kv.Key.LastIndexOf('/');
+                    string suffix = lastSlash > 0 ? kv.Key[(lastSlash + 1)..] : kv.Key;
+                    if (string.Equals(suffix, bare, StringComparison.OrdinalIgnoreCase))
+                        return kv.Key;
+                }
             }
         }
 
@@ -148,8 +173,10 @@ internal sealed class ProviderRegistry
             return providers.Select(p => (p, upstream)).ToArray();
         }
 
-        ProviderInfo? fallback = ResolveProvider(resolved);
-        return fallback is not null ? [((ProviderInfo)fallback, upstream)] : [];
+        // Empty registry → return no candidates; ResolveProvider would throw.
+        if (_providers.Count == 0)
+            return [];
+        return [(ResolveProvider(resolved), upstream)];
     }
 
     private void DiscoverProviders(ProviderHttpClientFactory httpClientFactory)

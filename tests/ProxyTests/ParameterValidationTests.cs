@@ -46,7 +46,7 @@ public class ParameterValidationTests
 
     [Theory]
     [InlineData("deepseek-v4-pro",              "deepseek", true,  false)]
-    [InlineData("deepseek-v4-flash",            "deepseek", true,  false)]
+    [InlineData("deepseek-coder-6.7b-instruct", "deepseek", true,  false)]
     public void DeepSeek_ReasoningEffortPresenceMatchesModel(
         string model, string provider, bool expectReasoningEffort, bool expectTopP)
     {
@@ -70,7 +70,7 @@ public class ParameterValidationTests
 
     [Theory]
     [InlineData("deepseek-v4-pro")]
-    [InlineData("deepseek-v4-flash")]
+    [InlineData("deepseek-coder-6.7b-instruct")]
     public void DeepSeek_ReasoningModels_MaxTokensInjected(string model)
     {
         RequestTransformer sut = CreateTransformer();
@@ -89,14 +89,11 @@ public class ParameterValidationTests
 
     public static TheoryData<string> NvidiaModels =>
     [
-        "deepseek-ai/deepseek-v4-pro",
         "qwen/qwen3-coder-480b-a35b-instruct",
-        "qwen/qwen3.5-397b-a17b",
-        "nvidia/nemotron-3-ultra-550b-a55b",
+        "moonshotai/kimi-k2.6",
         "nvidia/nemotron-3-super-120b-a12b",
-        "nvidia/llama-3.1-nemotron-70b-instruct",
         "openai/gpt-oss-120b",
-        "nvidia/llama-3.3-nemotron-super-49b-v1.5"
+        "qwen/qwen3.5-397b-a17b"
     ];
 
     [Theory]
@@ -226,8 +223,9 @@ public class ParameterValidationTests
     // ──────────────────────────────────────────────
 
     [Theory]
-    [InlineData("gemma4:31b")]
-    [InlineData("nemotron-3-super")]
+    [InlineData("qwen3-coder:480b")]
+    [InlineData("devstral-2:123b")]
+    [InlineData("kimi-k2.6")]
     public void OllamaCloud_Models_MaxTokensInjected(string model)
     {
         RequestTransformer sut = CreateTransformer();
@@ -240,8 +238,9 @@ public class ParameterValidationTests
     }
 
     [Theory]
-    [InlineData("gemma4:31b")]
-    [InlineData("nemotron-3-super")]
+    [InlineData("qwen3-coder:480b")]
+    [InlineData("devstral-2:123b")]
+    [InlineData("kimi-k2.6")]
     public void OllamaCloud_Models_NoReasoningEffortLeakage(string model)
     {
         RequestTransformer sut = CreateTransformer();
@@ -257,8 +256,8 @@ public class ParameterValidationTests
     // ──────────────────────────────────────────────
 
     [Theory]
-    [InlineData("nvidia/nemotron-3-super-120b-a12b:free")]
-    [InlineData("qwen/qwen3-coder:free")]
+    [InlineData("nvidia/nemotron-3-super-120b-a12b")]
+    [InlineData("qwen/qwen3-coder")]
     public void OpenRouter_Models_NoReasoningEffortLeakage(string model)
     {
         RequestTransformer sut = CreateTransformer();
@@ -276,10 +275,10 @@ public class ParameterValidationTests
 
     [Theory]
     [InlineData("kimi-k2.6")]
+    [InlineData("kimi-k2.5")]
     [InlineData("moonshot-v1-128k")]
     [InlineData("moonshot-v1-auto")]
     [InlineData("moonshot-v1-32k")]
-    [InlineData("moonshot-v1-8k")]
     public void Moonshot_Models_MaxTokensInjected(string model)
     {
         RequestTransformer sut = CreateTransformer();
@@ -293,10 +292,10 @@ public class ParameterValidationTests
 
     [Theory]
     [InlineData("kimi-k2.6")]
+    [InlineData("kimi-k2.5")]
     [InlineData("moonshot-v1-128k")]
     [InlineData("moonshot-v1-auto")]
     [InlineData("moonshot-v1-32k")]
-    [InlineData("moonshot-v1-8k")]
     public void Moonshot_Models_NoReasoningEffortLeakage(string model)
     {
         RequestTransformer sut = CreateTransformer();
@@ -308,6 +307,7 @@ public class ParameterValidationTests
 
     [Theory]
     [InlineData("kimi-k2.6")]
+    [InlineData("kimi-k2.5")]
     [InlineData("moonshot-v1-128k")]
     public void Moonshot_Models_TemperatureInjected(string model)
     {
@@ -322,8 +322,9 @@ public class ParameterValidationTests
 
     [Theory]
     [InlineData("kimi-k2.6")]
+    [InlineData("kimi-k2.5")]
     [InlineData("moonshot-v1-128k")]
-    [InlineData("moonshot-v1-8k")]
+    [InlineData("moonshot-v1-32k")]
     public void Moonshot_Models_TopPInjected(string model)
     {
         RequestTransformer sut = CreateTransformer();
@@ -344,7 +345,7 @@ public class ParameterValidationTests
     [Theory]
     [InlineData("deepseek-v4-pro",   "deepseek")]
     [InlineData("gpt-5",             "openai")]
-    [InlineData("deepseek-v4-flash", "deepseek")]
+    [InlineData("deepseek-coder-6.7b-instruct", "deepseek")]
     [InlineData("kimi-k2.6",         "moonshot")]
     public void TopK_IsFiltered_ForNonSupportingProviders(string model, string provider)
     {
@@ -377,10 +378,10 @@ public class ParameterValidationTests
 
     [Theory]
     [InlineData("deepseek-v4-pro",   "deepseek")]
-    [InlineData("deepseek-v4-flash", "deepseek")]
+    [InlineData("deepseek-coder-6.7b-instruct", "deepseek")]
     [InlineData("gpt-5",             "openai")]
     [InlineData("llama-3.3-70b-versatile", "groq")]
-    [InlineData("kimi-k2.6",         "moonshot")]
+    [InlineData("moonshot-v1-128k",  "moonshot")]
     public void ClientSupplied_MaxTokens_IsNotOverridden(string model, string provider)
     {
         RequestTransformer sut = CreateTransformer();
@@ -409,7 +410,7 @@ public class ParameterValidationTests
     [Theory]
     [InlineData("qwen/qwen3.5-397b-a17b",        "nvidia")]
     [InlineData("llama-3.3-70b-versatile",        "groq")]
-    [InlineData("kimi-k2.6",                      "moonshot")]
+    [InlineData("moonshot-v1-128k",              "moonshot")]
     public void ClientSupplied_Temperature_IsNotOverridden(string model, string provider)
     {
         RequestTransformer sut = CreateTransformer();
@@ -442,30 +443,47 @@ public class ParameterValidationTests
     // ──────────────────────────────────────────────
 
     [Theory]
-    // DeepSeek (2 enabled)
+    // DeepSeek (1 enabled)
     [InlineData("deepseek-v4-pro",              1_048_576, 384_000)]
-    [InlineData("deepseek-v4-flash",            1_048_576, 131_072)]
-    // NVIDIA NIM (6)
-    [InlineData("deepseek-ai/deepseek-v4-pro",  1_048_576, 384_000)]
+    [InlineData("deepseek-coder-6.7b-instruct",   128_000,   8_192)]
+    // NVIDIA NIM (5 curated for coding + Copilot)
     [InlineData("qwen/qwen3-coder-480b-a35b-instruct", 1_048_576, 65_536)]
-    [InlineData("qwen/qwen3.5-397b-a17b",          262_144,  16_384)]
+    [InlineData("moonshotai/kimi-k2.6",          262_144, 262_144)]
     [InlineData("nvidia/nemotron-3-super-120b-a12b", 1_000_000, 262_144)]
-    [InlineData("openai/gpt-oss-120b",             131_072, 16_384)]
-    [InlineData("nvidia/llama-3.3-nemotron-super-49b-v1.5", 131_072, 16_384)]
-    // OpenAI (4)
+    [InlineData("openai/gpt-oss-120b",             131_072, 65_536)]
+    [InlineData("qwen/qwen3.5-397b-a17b",          262_144,  16_384)]
+    // OpenAI (5)
     [InlineData("gpt-5",      400_000, 128_000)]
     [InlineData("gpt-5-mini", 400_000, 128_000)]
     [InlineData("gpt-4.1",  1_048_576,  32_768)]
     [InlineData("gpt-4o",     128_000,   8_192)]
-    // Groq (2)
+    [InlineData("gpt-oss-120b", 131_072, 65_536)]
+    // Groq (5)
     [InlineData("llama-3.3-70b-versatile",   131_072, 32_768)]
     [InlineData("qwen/qwen3-32b",            131_072, 16_384)]
+    [InlineData("meta-llama/llama-4-scout-17b-16e-instruct", 10_000_000, 16_384)]
+    [InlineData("openai/gpt-oss-20b",         131_072, 65_536)]
+    // (openai/gpt-oss-120b already covered in NVIDIA section above; both share the same context+max_output)
     // Moonshot/Kimi (5)
-    [InlineData("kimi-k2.6",          262_144, 262_144)]
-    [InlineData("moonshot-v1-128k",   128_000,  32_768)]
-    [InlineData("moonshot-v1-auto",   128_000,  32_768)]
+    [InlineData("kimi-k2.5",          262_144, 262_144)]
+    [InlineData("moonshot-v1-128k",   131_072,  32_768)]
+    [InlineData("moonshot-v1-auto",   131_072,  32_768)]
     [InlineData("moonshot-v1-32k",     32_768,   8_192)]
-    [InlineData("moonshot-v1-8k",       8_192,   4_096)]
+    // OpenRouter (5)
+    [InlineData("qwen/qwen3-coder",                  1_048_576, 262_000)]
+    [InlineData("nvidia/nemotron-3-super-120b-a12b", 1_000_000,  16_384)]
+    [InlineData("nvidia/nemotron-3-ultra-550b-a55b", 1_000_000, 262_144)]
+    [InlineData("deepseek/deepseek-v4-pro",          1_048_576, 384_000)]
+    // Cerebras (2)
+    [InlineData("zai-glm-4.7",  128_000, 32_768)]
+    [InlineData("gpt-oss-120b", 131_072, 65_536)]
+    // Ollama Cloud (5)
+    [InlineData("qwen3-coder:480b",  128_000, 32_768)]
+    [InlineData("qwen3-coder-next",  128_000, 32_768)]
+    [InlineData("devstral-2:123b",   128_000, 32_768)]
+    [InlineData("kimi-k2.6",         262_144, 262_144)]
+    // (deepseek-v4-pro in ollamacloud.json is shadowed by deepseek.json's higher-priority
+    // entry, so the canonical context length assertion is done in the deepseek section above.)
     public void AllModels_HaveCorrectContextWindowConfig(
         string model, int expectedContextLength, int minMaxOutput)
     {
@@ -493,7 +511,7 @@ public class ParameterValidationTests
 
     [Theory]
     [InlineData("deepseek-v4-pro")]
-    [InlineData("deepseek-v4-flash")]
+    [InlineData("deepseek-coder-6.7b-instruct")]
     public void DeepSeek_ReasoningEffort_IsValidValue(string model)
     {
         ModelSelectionStore store  = new();
@@ -512,25 +530,33 @@ public class ParameterValidationTests
 
     [Theory]
     [InlineData("deepseek-v4-pro",   "deepseek")]
-    [InlineData("deepseek-v4-flash", "deepseek")]
-    [InlineData("deepseek-ai/deepseek-v4-pro",  "nvidia")]
+    [InlineData("deepseek-coder-6.7b-instruct", "deepseek")]
     [InlineData("qwen/qwen3-coder-480b-a35b-instruct", "nvidia")]
-    [InlineData("qwen/qwen3.5-397b-a17b",        "nvidia")]
+    [InlineData("moonshotai/kimi-k2.6", "nvidia")]
     [InlineData("nvidia/nemotron-3-super-120b-a12b", "nvidia")]
     [InlineData("openai/gpt-oss-120b",           "nvidia")]
-    [InlineData("nvidia/llama-3.3-nemotron-super-49b-v1.5", "nvidia")]
+    [InlineData("qwen/qwen3.5-397b-a17b",        "nvidia")]
     [InlineData("gpt-5",        "openai")]
     [InlineData("gpt-5-mini",   "openai")]
     [InlineData("gpt-4.1",      "openai")]
     [InlineData("gpt-4o",       "openai")]
+    [InlineData("gpt-oss-120b", "openai")]
     [InlineData("llama-3.3-70b-versatile", "groq")]
     [InlineData("qwen/qwen3-32b",           "groq")]
-    [InlineData("nvidia/nemotron-3-super-120b-a12b:free", "openrouter")]
-    [InlineData("qwen/qwen3-coder:free",    "openrouter")]
+    [InlineData("openai/gpt-oss-120b",      "groq")]
+    [InlineData("openai/gpt-oss-20b",       "groq")]
+    [InlineData("qwen/qwen3-coder", "openrouter")]
+    [InlineData("nvidia/nemotron-3-super-120b-a12b", "openrouter")]
+    [InlineData("moonshotai/kimi-k2.6",  "openrouter")]
+    [InlineData("deepseek/deepseek-v4-pro", "openrouter")]
     [InlineData("kimi-k2.6",    "moonshot")]
+    [InlineData("kimi-k2.5",    "moonshot")]
     [InlineData("moonshot-v1-128k", "moonshot")]
     [InlineData("moonshot-v1-32k",  "moonshot")]
-    [InlineData("moonshot-v1-8k",   "moonshot")]
+    [InlineData("zai-glm-4.7", "cerebras")]
+    [InlineData("gpt-oss-120b", "cerebras")]
+    [InlineData("qwen3-coder:480b", "ollamacloud")]
+    [InlineData("devstral-2:123b",  "ollamacloud")]
     public void ConfiguredTemperature_IsWithinValidRange(string model, string provider)
     {
         _ = provider;
@@ -572,13 +598,15 @@ public class ParameterValidationTests
     // ──────────────────────────────────────────────
 
     [Theory]
-    [InlineData("deepseek", 3)]
-    [InlineData("openai", 4)]
-    [InlineData("nvidia", 8)]
-    [InlineData("groq", 4)]
-    [InlineData("openrouter", 2)]
-    [InlineData("moonshot", 5)]
-    [InlineData("ollamacloud", 10)]
+    [InlineData("deepseek", 2)]      // v4-pro + coder-6.7b (v4-flash disabled)
+    [InlineData("openai", 5)]        // gpt-5, gpt-5-mini, gpt-4.1, gpt-4o, gpt-oss-120b
+    [InlineData("nvidia", 5)]        // 5 curated for coding + Copilot
+    [InlineData("groq", 5)]          // llama-3.3-70b, qwen3-32b, llama-4-scout, gpt-oss-120b/20b
+    [InlineData("openrouter", 5)]    // 2 free + 3 premium coding models
+    [InlineData("moonshot", 5)]      // kimi-k2.6/2.5 + 3 moonshot-v1 (8k disabled)
+    [InlineData("cerebras", 2)]      // both available in the catalog
+    [InlineData("ollama", 6)]        // 5 ollamacloud.json (qwen3-coder x2, devstral, kimi, ds) + 1 ollama.json (mistral)
+    [InlineData("ollamacloud", 10)]  // key not present in registry — falls back to default preferred
     public void EnabledModelCount_IsCorrect(string providerName, int expectedEnabled)
     {
         ModelSelectionStore store = new();
