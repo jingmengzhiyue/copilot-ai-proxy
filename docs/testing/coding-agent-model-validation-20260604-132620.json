@@ -1,0 +1,540 @@
+{
+  "summary": {
+    "generated_at_utc": "2026-06-04T13:28:23.4301857Z",
+    "total_candidates": 24,
+    "successful": 13,
+    "failed": 11,
+    "source": "http://localhost:11434/v1/models",
+    "selection_pattern": "coder|code|gpt-oss|deepseek|qwen|nemotron|llama-4|mixtral|mistral-large|kimi"
+  },
+  "models": [
+    {
+      "model": "deepseek-ai/deepseek-v4-pro",
+      "provider": "nvidia",
+      "tested_at_utc": "2026-06-04T13:27:07.6801930Z",
+      "test": {
+        "success": false,
+        "status": "error",
+        "latency_ms": 45023,
+        "sample": "",
+        "error": "The request was canceled due to the configured HttpClient.Timeout of 45 seconds elapsing."
+      },
+      "profile": {
+        "suitable_for_coding_agents": true,
+        "prompt_style": "short deterministic",
+        "recommended": {
+          "temperature": 0.2,
+          "top_p": 0.9,
+          "max_tokens": 512,
+          "stream": true
+        }
+      }
+    },
+    {
+      "model": "gpt-oss:120b",
+      "provider": "ollama",
+      "tested_at_utc": "2026-06-04T13:27:09.7510699Z",
+      "test": {
+        "success": true,
+        "status": "ok",
+        "latency_ms": 2065,
+        "sample": "OK",
+        "error": ""
+      },
+      "profile": {
+        "suitable_for_coding_agents": true,
+        "prompt_style": "short deterministic",
+        "recommended": {
+          "temperature": 0.2,
+          "top_p": 0.9,
+          "max_tokens": 512,
+          "stream": true
+        }
+      }
+    },
+    {
+      "model": "gpt-oss:20b",
+      "provider": "ollama",
+      "tested_at_utc": "2026-06-04T13:27:10.6499027Z",
+      "test": {
+        "success": true,
+        "status": "ok",
+        "latency_ms": 898,
+        "sample": "OK",
+        "error": ""
+      },
+      "profile": {
+        "suitable_for_coding_agents": true,
+        "prompt_style": "short deterministic",
+        "recommended": {
+          "temperature": 0.2,
+          "top_p": 0.9,
+          "max_tokens": 512,
+          "stream": true
+        }
+      }
+    },
+    {
+      "model": "deepseek-v3.1:671b",
+      "provider": "ollama",
+      "tested_at_utc": "2026-06-04T13:27:11.0205064Z",
+      "test": {
+        "success": false,
+        "status": "error",
+        "latency_ms": 370,
+        "sample": "",
+        "error": "Response status code does not indicate success: 403 (Forbidden)."
+      },
+      "profile": {
+        "suitable_for_coding_agents": true,
+        "prompt_style": "short deterministic",
+        "recommended": {
+          "temperature": 0.2,
+          "top_p": 0.9,
+          "max_tokens": 512,
+          "stream": true
+        }
+      }
+    },
+    {
+      "model": "deepseek-v3.2",
+      "provider": "ollama",
+      "tested_at_utc": "2026-06-04T13:27:11.4064264Z",
+      "test": {
+        "success": false,
+        "status": "error",
+        "latency_ms": 385,
+        "sample": "",
+        "error": "Response status code does not indicate success: 403 (Forbidden)."
+      },
+      "profile": {
+        "suitable_for_coding_agents": true,
+        "prompt_style": "short deterministic",
+        "recommended": {
+          "temperature": 0.2,
+          "top_p": 0.9,
+          "max_tokens": 512,
+          "stream": true
+        }
+      }
+    },
+    {
+      "model": "deepseek-v4-flash",
+      "provider": "ollama",
+      "tested_at_utc": "2026-06-04T13:27:11.7934893Z",
+      "test": {
+        "success": false,
+        "status": "error",
+        "latency_ms": 386,
+        "sample": "",
+        "error": "Response status code does not indicate success: 403 (Forbidden)."
+      },
+      "profile": {
+        "suitable_for_coding_agents": true,
+        "prompt_style": "short deterministic",
+        "recommended": {
+          "temperature": 0.2,
+          "top_p": 0.9,
+          "max_tokens": 512,
+          "stream": true
+        }
+      }
+    },
+    {
+      "model": "deepseek-v4-pro",
+      "provider": "ollama",
+      "tested_at_utc": "2026-06-04T13:27:12.1450219Z",
+      "test": {
+        "success": false,
+        "status": "error",
+        "latency_ms": 351,
+        "sample": "",
+        "error": "Response status code does not indicate success: 403 (Forbidden)."
+      },
+      "profile": {
+        "suitable_for_coding_agents": true,
+        "prompt_style": "short deterministic",
+        "recommended": {
+          "temperature": 0.2,
+          "top_p": 0.9,
+          "max_tokens": 512,
+          "stream": true
+        }
+      }
+    },
+    {
+      "model": "qwen/qwen3-coder-480b-a35b-instruct",
+      "provider": "nvidia",
+      "tested_at_utc": "2026-06-04T13:27:56.8533099Z",
+      "test": {
+        "success": true,
+        "status": "ok",
+        "latency_ms": 44714,
+        "sample": "OK",
+        "error": ""
+      },
+      "profile": {
+        "suitable_for_coding_agents": true,
+        "prompt_style": "short deterministic",
+        "recommended": {
+          "temperature": 0.2,
+          "top_p": 0.9,
+          "max_tokens": 512,
+          "stream": true
+        }
+      }
+    },
+    {
+      "model": "qwen3-coder-next",
+      "provider": "ollama",
+      "tested_at_utc": "2026-06-04T13:28:01.7921271Z",
+      "test": {
+        "success": true,
+        "status": "ok",
+        "latency_ms": 4939,
+        "sample": "OK",
+        "error": ""
+      },
+      "profile": {
+        "suitable_for_coding_agents": true,
+        "prompt_style": "short deterministic",
+        "recommended": {
+          "temperature": 0.2,
+          "top_p": 0.9,
+          "max_tokens": 512,
+          "stream": true
+        }
+      }
+    },
+    {
+      "model": "qwen3-coder:480b",
+      "provider": "ollama",
+      "tested_at_utc": "2026-06-04T13:28:02.8085321Z",
+      "test": {
+        "success": true,
+        "status": "ok",
+        "latency_ms": 1016,
+        "sample": "OK",
+        "error": ""
+      },
+      "profile": {
+        "suitable_for_coding_agents": true,
+        "prompt_style": "short deterministic",
+        "recommended": {
+          "temperature": 0.2,
+          "top_p": 0.9,
+          "max_tokens": 512,
+          "stream": true
+        }
+      }
+    },
+    {
+      "model": "qwen3-next:80b",
+      "provider": "ollama",
+      "tested_at_utc": "2026-06-04T13:28:04.4969846Z",
+      "test": {
+        "success": true,
+        "status": "ok",
+        "latency_ms": 1688,
+        "sample": "OK",
+        "error": ""
+      },
+      "profile": {
+        "suitable_for_coding_agents": true,
+        "prompt_style": "short deterministic",
+        "recommended": {
+          "temperature": 0.2,
+          "top_p": 0.9,
+          "max_tokens": 512,
+          "stream": true
+        }
+      }
+    },
+    {
+      "model": "qwen3-vl:235b",
+      "provider": "ollama",
+      "tested_at_utc": "2026-06-04T13:28:14.0439753Z",
+      "test": {
+        "success": true,
+        "status": "ok",
+        "latency_ms": 9548,
+        "sample": "OK",
+        "error": ""
+      },
+      "profile": {
+        "suitable_for_coding_agents": true,
+        "prompt_style": "short deterministic",
+        "recommended": {
+          "temperature": 0.2,
+          "top_p": 0.9,
+          "max_tokens": 512,
+          "stream": true
+        }
+      }
+    },
+    {
+      "model": "qwen3-vl:235b-instruct",
+      "provider": "ollama",
+      "tested_at_utc": "2026-06-04T13:28:15.0129173Z",
+      "test": {
+        "success": true,
+        "status": "ok",
+        "latency_ms": 968,
+        "sample": "OK",
+        "error": ""
+      },
+      "profile": {
+        "suitable_for_coding_agents": true,
+        "prompt_style": "short deterministic",
+        "recommended": {
+          "temperature": 0.2,
+          "top_p": 0.9,
+          "max_tokens": 512,
+          "stream": true
+        }
+      }
+    },
+    {
+      "model": "qwen3.5:397b",
+      "provider": "ollama",
+      "tested_at_utc": "2026-06-04T13:28:15.3783561Z",
+      "test": {
+        "success": false,
+        "status": "error",
+        "latency_ms": 365,
+        "sample": "",
+        "error": "Response status code does not indicate success: 403 (Forbidden)."
+      },
+      "profile": {
+        "suitable_for_coding_agents": true,
+        "prompt_style": "short deterministic",
+        "recommended": {
+          "temperature": 0.2,
+          "top_p": 0.9,
+          "max_tokens": 512,
+          "stream": true
+        }
+      }
+    },
+    {
+      "model": "mistral-large-3:675b",
+      "provider": "ollama",
+      "tested_at_utc": "2026-06-04T13:28:15.7640220Z",
+      "test": {
+        "success": false,
+        "status": "error",
+        "latency_ms": 385,
+        "sample": "",
+        "error": "Response status code does not indicate success: 403 (Forbidden)."
+      },
+      "profile": {
+        "suitable_for_coding_agents": true,
+        "prompt_style": "short deterministic",
+        "recommended": {
+          "temperature": 0.2,
+          "top_p": 0.9,
+          "max_tokens": 512,
+          "stream": true
+        }
+      }
+    },
+    {
+      "model": "qwen/qwen3.5-397b-a17b",
+      "provider": "nvidia",
+      "tested_at_utc": "2026-06-04T13:28:18.8515965Z",
+      "test": {
+        "success": true,
+        "status": "ok",
+        "latency_ms": 3087,
+        "sample": "OK",
+        "error": ""
+      },
+      "profile": {
+        "suitable_for_coding_agents": true,
+        "prompt_style": "short deterministic",
+        "recommended": {
+          "temperature": 0.2,
+          "top_p": 0.9,
+          "max_tokens": 512,
+          "stream": true
+        }
+      }
+    },
+    {
+      "model": "nemotron-3-nano:30b",
+      "provider": "ollama",
+      "tested_at_utc": "2026-06-04T13:28:19.6978644Z",
+      "test": {
+        "success": true,
+        "status": "ok",
+        "latency_ms": 846,
+        "sample": "OK",
+        "error": ""
+      },
+      "profile": {
+        "suitable_for_coding_agents": true,
+        "prompt_style": "short deterministic",
+        "recommended": {
+          "temperature": 0.2,
+          "top_p": 0.9,
+          "max_tokens": 512,
+          "stream": true
+        }
+      }
+    },
+    {
+      "model": "nemotron-3-super",
+      "provider": "ollama",
+      "tested_at_utc": "2026-06-04T13:28:20.4923186Z",
+      "test": {
+        "success": true,
+        "status": "ok",
+        "latency_ms": 794,
+        "sample": "OK",
+        "error": ""
+      },
+      "profile": {
+        "suitable_for_coding_agents": true,
+        "prompt_style": "short deterministic",
+        "recommended": {
+          "temperature": 0.2,
+          "top_p": 0.9,
+          "max_tokens": 512,
+          "stream": true
+        }
+      }
+    },
+    {
+      "model": "nemotron-3-ultra",
+      "provider": "ollama",
+      "tested_at_utc": "2026-06-04T13:28:21.2287629Z",
+      "test": {
+        "success": true,
+        "status": "ok",
+        "latency_ms": 736,
+        "sample": "OK",
+        "error": ""
+      },
+      "profile": {
+        "suitable_for_coding_agents": true,
+        "prompt_style": "short deterministic",
+        "recommended": {
+          "temperature": 0.2,
+          "top_p": 0.9,
+          "max_tokens": 512,
+          "stream": true
+        }
+      }
+    },
+    {
+      "model": "qwen/qwen3-next-80b-a3b-instruct",
+      "provider": "nvidia",
+      "tested_at_utc": "2026-06-04T13:28:21.9428390Z",
+      "test": {
+        "success": true,
+        "status": "ok",
+        "latency_ms": 713,
+        "sample": "OK",
+        "error": ""
+      },
+      "profile": {
+        "suitable_for_coding_agents": true,
+        "prompt_style": "short deterministic",
+        "recommended": {
+          "temperature": 0.2,
+          "top_p": 0.9,
+          "max_tokens": 512,
+          "stream": true
+        }
+      }
+    },
+    {
+      "model": "kimi-k2-thinking",
+      "provider": "ollama",
+      "tested_at_utc": "2026-06-04T13:28:22.3338784Z",
+      "test": {
+        "success": false,
+        "status": "error",
+        "latency_ms": 390,
+        "sample": "",
+        "error": "Response status code does not indicate success: 403 (Forbidden)."
+      },
+      "profile": {
+        "suitable_for_coding_agents": true,
+        "prompt_style": "short deterministic",
+        "recommended": {
+          "temperature": 0.2,
+          "top_p": 0.9,
+          "max_tokens": 512,
+          "stream": true
+        }
+      }
+    },
+    {
+      "model": "kimi-k2.5",
+      "provider": "ollama",
+      "tested_at_utc": "2026-06-04T13:28:22.7157347Z",
+      "test": {
+        "success": false,
+        "status": "error",
+        "latency_ms": 381,
+        "sample": "",
+        "error": "Response status code does not indicate success: 403 (Forbidden)."
+      },
+      "profile": {
+        "suitable_for_coding_agents": true,
+        "prompt_style": "short deterministic",
+        "recommended": {
+          "temperature": 0.2,
+          "top_p": 0.9,
+          "max_tokens": 512,
+          "stream": true
+        }
+      }
+    },
+    {
+      "model": "kimi-k2.6",
+      "provider": "ollama",
+      "tested_at_utc": "2026-06-04T13:28:23.0683247Z",
+      "test": {
+        "success": false,
+        "status": "error",
+        "latency_ms": 352,
+        "sample": "",
+        "error": "Response status code does not indicate success: 403 (Forbidden)."
+      },
+      "profile": {
+        "suitable_for_coding_agents": true,
+        "prompt_style": "short deterministic",
+        "recommended": {
+          "temperature": 0.2,
+          "top_p": 0.9,
+          "max_tokens": 512,
+          "stream": true
+        }
+      }
+    },
+    {
+      "model": "kimi-k2:1t",
+      "provider": "ollama",
+      "tested_at_utc": "2026-06-04T13:28:23.4298824Z",
+      "test": {
+        "success": false,
+        "status": "error",
+        "latency_ms": 361,
+        "sample": "",
+        "error": "Response status code does not indicate success: 403 (Forbidden)."
+      },
+      "profile": {
+        "suitable_for_coding_agents": true,
+        "prompt_style": "short deterministic",
+        "recommended": {
+          "temperature": 0.2,
+          "top_p": 0.9,
+          "max_tokens": 512,
+          "stream": true
+        }
+      }
+    }
+  ]
+}
