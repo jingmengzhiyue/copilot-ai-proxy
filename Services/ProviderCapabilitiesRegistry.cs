@@ -40,6 +40,16 @@ internal static class ProviderCapabilitiesRegistry
             DefaultBaseUrl: "https://api.moonshot.ai",
             EnvPrefix: "MOONSHOT"),
 
+        ["google"] = new(
+            Category: ProviderCategory.Direct,
+            ApiFormat: ApiFormat.OpenAi,
+            SupportsReasoningEffort: true,
+            SupportsTopK: false,
+            ChatPath: "v1beta/openai/chat/completions",
+            ModelsPath: "v1beta/openai/models",
+            DefaultBaseUrl: "https://generativelanguage.googleapis.com",
+            EnvPrefix: "GOOGLE"),
+
         ["cerebras"] = new(
             Category: ProviderCategory.Direct,
             ApiFormat: ApiFormat.OpenAi,
