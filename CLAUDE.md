@@ -119,7 +119,7 @@ Model metadata lives in `config/model-selection/{provider}.json` (8 files: `deep
 
 ### Curated model cap
 
-Each provider exposes **5 enabled models maximum** (DeepSeek and Cerebras expose 2, Ollama Cloud exposes 5). Curated picks prioritise coding strength for GitHub Copilot in Visual Studio 2026:
+Each provider exposes **up to 9 enabled models** (DeepSeek and Cerebras expose 2, Ollama Cloud exposes 9). Curated picks prioritise coding strength for GitHub Copilot in Visual Studio 2026:
 
 | Provider | Top picks |
 |----------|-----------|
@@ -130,7 +130,7 @@ Each provider exposes **5 enabled models maximum** (DeepSeek and Cerebras expose
 | OpenRouter | qwen3-coder, nemotron-3-super, nemotron-3-ultra, kimi-k2.6, deepseek-v4-pro, qwen3.7-plus |
 | Moonshot | kimi-k2.6, kimi-k2.5, moonshot-v1-{128k,auto,32k} |
 | Cerebras | zai-glm-4.7, gpt-oss-120b |
-| Ollama Cloud | qwen3-coder:480b, qwen3-coder-next, devstral-2:123b, kimi-k2.6, deepseek-v4-pro |
+| Ollama Cloud | kimi2.7-code, glm-5.2, minimax-m3, qwen3-coder:480b, qwen3-coder-next, devstral-2:123b, kimi-k2.6, deepseek-v4-pro, mistral-medium-3.5 |
 
 ### 3-level `provider/model` hint resolution
 

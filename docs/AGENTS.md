@@ -75,7 +75,7 @@ POST /api/chat                     → Chat completion (Ollama format; NDJSON st
 
 ---
 
-## Curated Model Roster (2026-06-10)
+## Curated Model Roster (2026-06-16)
 
 Each provider exposes **5 enabled models maximum** (a few smaller providers expose 2). The curation is optimised for **GitHub Copilot inside Visual Studio 2026**: coding-first picks with deep context windows, strong tool support, and 1M-token reasoning where available.
 
@@ -88,7 +88,7 @@ Each provider exposes **5 enabled models maximum** (a few smaller providers expo
 | **OpenRouter** | `qwen/qwen3.7-plus`, `qwen/qwen3-coder`, `nvidia/nemotron-3-super-120b-a12b`, `nvidia/nemotron-3-ultra-550b-a55b`, `moonshotai/kimi-k2.7-code`, `deepseek/deepseek-v4-pro` | 6 enabled |
 | **Moonshot/Kimi** | `kimi-k2.7-code`, `kimi-k2.6`, `kimi-k2.5`, `moonshot-v1-128k`, `moonshot-v1-auto` | 5 enabled; **kimi-k2.7-code, kimi-k2.6 and kimi-k2.5 have `override_client_params=true` (forces `temperature=1.0`)** |
 | **Cerebras** | `zai-glm-4.7`, `gpt-oss-120b` | 2 enabled (Cerebras has a small curated set) |
-| **Ollama Cloud** | `qwen3-coder:480b`, `qwen3-coder-next`, `devstral-2:123b`, `kimi-k2.6`, `deepseek-v4-pro` | 5 enabled; `kimi-k2.6` inherits Moonshot's force-mode |
+| **Ollama Cloud** | `kimi2.7-code`, `glm-5.2`, `minimax-m3`, `qwen3-coder:480b`, `qwen3-coder-next`, `devstral-2:123b`, `kimi-k2.6`, `deepseek-v4-pro`, `mistral-medium-3.5` | 9 enabled; 🥇🥈🥉 podio; `kimi2.7-code` has `override_client_params=true` (forces `temperature=1.0`) |
 
 ---
 
@@ -182,7 +182,7 @@ config/model-selection/
 ├── openrouter.json     # qwen3-coder, nemotron, kimi-k2.6, deepseek-v4-pro
 ├── moonshot.json       # kimi-k2.6, kimi-k2.5, moonshot-v1-* (kimi's have override_client_params=true)
 ├── cerebras.json       # zai-glm-4.7, gpt-oss-120b
-└── ollamacloud.json    # qwen3-coder:480b, qwen3-coder-next, devstral-2:123b, kimi-k2.6, deepseek-v4-pro
+└── ollamacloud.json    # kimi2.7-code, glm-5.2, minimax-m3, qwen3-coder:480b, qwen3-coder-next, devstral-2:123b, kimi-k2.6, deepseek-v4-pro, mistral-medium-3.5
 ```
 
 > `ollamacloud.json` and `ollama.json` both declare `"provider": "ollama"`, so the loader merges them under the `"ollama"` key. The local-ollama `ollama.json` currently exposes only a few matches (most disabled in the May 2026 curation); Ollama Cloud is the production-ready path.

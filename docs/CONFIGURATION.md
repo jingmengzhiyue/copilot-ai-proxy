@@ -188,12 +188,12 @@ config/model-selection/
 ├── openrouter.json    # OpenRouter      (6 enabled: qwen3.7-plus, qwen3-coder, nemotron-3-super, nemotron-3-ultra, moonshotai/kimi-k2.7-code, deepseek-v4-pro)
 ├── moonshot.json      # Moonshot/Kimi   (5 enabled: kimi-k2.7-code, kimi-k2.6, kimi-k2.5, moonshot-v1-128k, moonshot-v1-auto)
 ├── cerebras.json      # Cerebras        (2 enabled: zai-glm-4.7, gpt-oss-120b)
-└── ollamacloud.json   # Ollama Cloud    (5 enabled: qwen3-coder:480b, qwen3-coder-next, devstral-2:123b, kimi-k2.6, deepseek-v4-pro)
+└── ollamacloud.json   # Ollama Cloud    (9 enabled: kimi2.7-code, glm-5.2, minimax-m3, qwen3-coder:480b, qwen3-coder-next, devstral-2:123b, kimi-k2.6, deepseek-v4-pro, mistral-medium-3.5)
 ```
 
 > `ollamacloud.json` and `ollama.json` both declare `"provider": "ollama"`, so the loader merges them under the `"ollama"` key. The local-ollama `ollama.json` currently exposes only a few matches (most disabled in the May 2026 curation); Ollama Cloud is the production-ready path.
 
-The cap of **5 enabled models per provider** is intentional: it keeps the `/v1/models` listing focused, ensures the proxy's per-model execution defaults stay accurate, and makes the curated picks obvious in any IDE autocomplete. The cap is enforced by `ParameterValidationTests.EnabledModelCount_IsCorrect` (per-provider theory).
+The cap of **up to 9 enabled models per provider** is intentional: it keeps the `/v1/models` listing focused, ensures the proxy's per-model execution defaults stay accurate, and makes the curated picks obvious in any IDE autocomplete. The counting is enforced by `ParameterValidationTests.EnabledModelCount_IsCorrect` (per-provider theory).
 
 ### Example: DeepSeek Configuration
 
@@ -371,7 +371,7 @@ public class RequestTransformer
 
 ## Context Window Specifications
 
-All curated enabled models and their context window limits. The cap is **5 enabled models per provider** (with a few smaller providers exposing 2).
+All curated enabled models and their context window limits. The cap is **up to 9 enabled models per provider** (with a few smaller providers exposing 2).
 
 ### DeepSeek (2 enabled)
 
@@ -439,15 +439,19 @@ All curated enabled models and their context window limits. The cap is **5 enabl
 | zai-glm-4.7 | 128k | 32k | GLM 4.7 (Zhipu) |
 | gpt-oss-120b | 131k | 65k | OpenAI-compatible reasoning |
 
-### Ollama Cloud (5 enabled — open-weights quantised)
+### Ollama Cloud (9 enabled — open-weights quantised, 🥇🥈🥉 podio)
 
 | Model | Context | Max Output | Notes |
 |-------|---------|-----------|-------|
-| qwen3-coder:480b | 128k | 32k | Top Ollama Cloud coding pick, 1.5T params |
+| kimi2.7-code | 262k | 262k | 🥇 Podio #1 — Kimi 2.7 code-specialized, force-mode `temperature=1.0` |
+| glm-5.2 | 128k | 32k | 🥈 Podio #2 — GLM 5.2 latest, strong reasoning, timeout 240s |
+| minimax-m3 | 128k | 32k | 🥉 Podio #3 — MiniMax M3, timeout 240s |
+| qwen3-coder:480b | 128k | 32k | 1.5T Qwen coder, native tool support |
 | qwen3-coder-next | 128k | 32k | Qwen coder, next variant |
 | devstral-2:123b | 128k | 32k | Mistral's devstral coder |
-| kimi-k2.6 | 256k | 256k | Force-mode `temperature=1.0` (inherits Moonshot rule) |
+| kimi-k2.6 | 256k | 256k | Force-mode `temperature=1.0` |
 | deepseek-v4-pro | 128k | 32k | DeepSeek V4 Pro quantised |
+| mistral-medium-3.5 | 128k | 32k | Mistral Medium 3.5 |
 
 > The full per-provider roster (with all disabled entries for documentation) is in `config/model-selection/*.json`. To enable a disabled model, set `"enabled": true` in its JSON and restart the proxy.
 

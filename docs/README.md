@@ -9,7 +9,7 @@ A high-performance, ultra-low-overhead HTTP proxy that connects GitHub Copilot a
 | 🏗️ | Details |
 |---|---|
 | **Providers** | DeepSeek, OpenAI, NVIDIA NIM, Groq, OpenRouter, Ollama Cloud, Moonshot/Kimi, Cerebras |
-| **Models** | Auto-discovered from each provider; curated to **5 enabled per provider** for coding |
+| **Models** | Auto-discovered from each provider; curated to **5-9 enabled per provider** for coding |
 | **Default Port** | `11434` |
 | **Framework** | .NET 10 |
 | **Tests** | 329 passing ✅ |
@@ -24,7 +24,7 @@ A high-performance, ultra-low-overhead HTTP proxy that connects GitHub Copilot a
   - **Ollama-compatible** (`/api/chat`, `/api/tags`, `/api/show`) — works with VS BYOM and Ollama clients
 - **🛡️ Force-mode parameter override** — `override_client_params: true` in model JSON force-overwrites client values for models with hard requirements (e.g. Moonshot Kimi K2.x mandates `temperature=1.0`)
 - **🎯 3-level `provider/model` hint resolution** — `nvidia/qwen3.5-397b-a17b` correctly resolves to NVIDIA's family-prefixed upstream id `qwen/qwen3.5-397b-a17b`
-- **📋 Curated model roster** — Top 5 coding-optimised models per provider, hand-picked for GitHub Copilot in VS 2026
+- **📋 Curated model roster** — Top coding-optimised models per provider, hand-picked for GitHub Copilot in VS 2026
 - **⚡ Ultra-Performance** — HTTP/2 connection pooling (256 connections/server), zero-copy streaming, minimal allocations
 - **📦 Zero-Copy Streaming** — SSE pass-through without buffering
 - **🔧 No External Dependencies** — Uses only built-in ASP.NET Core and System.Text.Json
@@ -75,7 +75,7 @@ docker compose up -d
 dotnet run
 ```
 
-You should see startup output listing the 8 providers (whichever have keys) and ~40 curated models.
+You should see startup output listing the 8 providers (whichever have keys) and ~45 curated models.
 
 ## API Reference
 
@@ -125,11 +125,11 @@ http://localhost:11434/api/chat
 ```
 
 Top picks for coding in VS 2026:
+- `kimi2.7-code` (Ollama Cloud) — Kimi 2.7 code-specialized, 262K context, podio #1
+- `glm-5.2` (Ollama Cloud) — GLM 5.2 latest, strong reasoning, podio #2
+- `minimax-m3` (Ollama Cloud) — MiniMax M3, podio #3
 - `qwen3-coder:480b` (Ollama Cloud) — 1.5T Qwen coder, native tool support
 - `qwen/qwen3-coder-480b-a35b-instruct` (NVIDIA NIM) — same model on NIM with 1M context
-- `kimi-k2.6` (Moonshot) — 256K context, force-mode `temperature=1.0`
-- `gpt-5` (OpenAI) — best general reasoning
-- `gpt-oss-120b` (Cerebras / OpenAI / NVIDIA / Groq) — open-weights reasoning
 
 ### Continue.dev / Cursor
 
@@ -199,7 +199,7 @@ The canonical use case is Moonshot Kimi K2.5 / K2.6 which reject any `temperatur
 
 ## Provider Support
 
-Each provider exposes a curated set of **5 enabled models** (max), prioritised for coding. The full per-provider roster is in `config/model-selection/*.json`.
+Each provider exposes a curated set of **up to 9 enabled models**, prioritised for coding. The full per-provider roster is in `config/model-selection/*.json`.
 
 | Provider | # enabled | Top picks | Notes |
 |----------|----------:|-----------|-------|
@@ -210,7 +210,7 @@ Each provider exposes a curated set of **5 enabled models** (max), prioritised f
 | **OpenRouter** | 5 | qwen3-coder, nemotron-3-super, nemotron-3-ultra, kimi-k2.6, deepseek-v4-pro | Multi-backend passthrough |
 | **Moonshot/Kimi** | 5 | kimi-k2.6, kimi-k2.5, moonshot-v1-{128k,auto,32k} | Kimi K2.x forces `temperature=1.0` |
 | **Cerebras** | 2 | zai-glm-4.7, gpt-oss-120b | Small curated set |
-| **Ollama Cloud** | 5 | qwen3-coder:480b, qwen3-coder-next, devstral-2:123b, kimi-k2.6, deepseek-v4-pro | Quantised open models |
+| **Ollama Cloud** | 9 | kimi2.7-code, glm-5.2, minimax-m3, qwen3-coder:480b, qwen3-coder-next, devstral-2:123b, kimi-k2.6, deepseek-v4-pro, mistral-medium-3.5 | Quantised open models; 🥇🥈🥉 podio |
 
 **[→ Configuration Guide](docs/CONFIGURATION.md#context-window-specifications)**
 
