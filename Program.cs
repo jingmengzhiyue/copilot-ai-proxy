@@ -8,7 +8,7 @@ if (!File.Exists(envPath))
 }
 if (File.Exists(envPath))
 {
-    Console.WriteLine($"📄 Cargando configuración desde: {envPath}");
+    Console.WriteLine($"📄 Loading configuration from: {envPath}");
     foreach (string line in File.ReadAllLines(envPath))
     {
         string trimmed = line.Trim();

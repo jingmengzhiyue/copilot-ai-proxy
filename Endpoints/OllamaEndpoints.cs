@@ -6,7 +6,7 @@ internal static class OllamaEndpoints
 {
     internal static IEndpointRouteBuilder MapOllamaEndpoints(this IEndpointRouteBuilder app)
     {
-        app.MapGet("/api/version", () => Results.Json(new { version = "0.5.7" }, JsonDefaults.SnakeCase));
+        app.MapGet("/api/version", () => Results.Json(new { version = "0.6.4" }, JsonDefaults.SnakeCase));
 
         app.MapGet("/api/tags", async (HttpContext ctx, ModelCatalogService modelCatalog, ProviderRegistry providerRegistry, ModelSelectionStore modelSelectionStore) =>
         {
