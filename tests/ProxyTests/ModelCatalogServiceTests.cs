@@ -29,6 +29,9 @@ public class ModelCatalogServiceTests : IDisposable
             "PROVIDER_GROQ_API_KEY", "PROVIDER_GROQ_BASE_URL",
             "PROVIDER_OLLAMACLOUD_API_KEY", "PROVIDER_OLLAMA_API_KEY", "PROVIDER_OLLAMA_BASE_URL",
             "PROVIDER_GOOGLE_API_KEY", "PROVIDER_GOOGLE_BASE_URL",
+            "PROVIDER_ZHIPU_API_KEY", "PROVIDER_ZHIPU_BASE_URL",
+            "PROVIDER_QWEN_API_KEY", "PROVIDER_QWEN_BASE_URL",
+            "PROVIDER_CUSTOMOPENAI_API_KEY", "PROVIDER_CUSTOMOPENAI_BASE_URL",
             "PROVIDER_MOONSHOT_API_KEY", "PROVIDER_MOONSHOT_BASE_URL",
             "DEEPSEEK_API_KEY", "DEEPSEEK_BASE_URL",
             "DEEPSEEK_MODEL"
@@ -195,6 +198,64 @@ public class ModelCatalogServiceTests : IDisposable
         Assert.Equal("google", registry.ModelToProvider["models/gemini-2.5-flash"].Name);
         Assert.Equal("google", registry.ModelToProvider["models/gemini-2.5-flash@google"].Name);
         Assert.Contains("models/gemini-2.5-flash", catalog.AvailableModels);
+    }
+
+    [Fact]
+    public async Task Zhipu_OnlyProvider_ClaimsBareName()
+    {
+        (ModelCatalogService catalog, ProviderRegistry registry, _) =
+            BuildCatalog(new Dictionary<string, string[]> { ["zhipu"] = ["glm-5.2"] });
+
+        await catalog.RefreshAvailableModels(CancellationToken.None);
+
+        Assert.Equal("zhipu", registry.ResolveProvider("glm-5.2").Name);
+        Assert.Equal("zhipu", registry.ModelToProvider["glm-5.2"].Name);
+        Assert.Equal("zhipu", registry.ModelToProvider["glm-5.2@zhipu"].Name);
+        Assert.Contains("glm-5.2", catalog.AvailableModels);
+    }
+
+    [Fact]
+    public async Task Zhipu_DisplayName_ResolvesToUpstreamModel()
+    {
+        (ModelCatalogService catalog, ProviderRegistry registry, _) =
+            BuildCatalog(new Dictionary<string, string[]> { ["zhipu"] = ["glm-5.2"] });
+
+        await catalog.RefreshAvailableModels(CancellationToken.None);
+
+        Assert.Contains("GLM 5.2", catalog.AvailableModels);
+        Assert.Equal("zhipu", registry.ResolveProvider("GLM 5.2").Name);
+        Assert.Equal("glm-5.2", registry.ResolveUpstreamModel("GLM 5.2"));
+        Assert.Equal("glm-5.2", registry.ResolveUpstreamModel("GLM 5.2:latest"));
+        Assert.Equal("glm-5.2", registry.ResolveUpstreamModel("GLM 5.2@zhipu"));
+        Assert.Equal(1_000_000, catalog.GetExecutionConfigForModel("GLM 5.2").ContextLength);
+    }
+
+    [Fact]
+    public async Task Qwen_OnlyProvider_ClaimsBareName()
+    {
+        (ModelCatalogService catalog, ProviderRegistry registry, _) =
+            BuildCatalog(new Dictionary<string, string[]> { ["qwen"] = ["qwen3-coder-plus"] });
+
+        await catalog.RefreshAvailableModels(CancellationToken.None);
+
+        Assert.Equal("qwen", registry.ResolveProvider("qwen3-coder-plus").Name);
+        Assert.Equal("qwen", registry.ModelToProvider["qwen3-coder-plus"].Name);
+        Assert.Equal("qwen", registry.ModelToProvider["qwen3-coder-plus@qwen"].Name);
+        Assert.Contains("qwen3-coder-plus", catalog.AvailableModels);
+    }
+
+    [Fact]
+    public async Task CustomOpenAi_OnlyProvider_ClaimsBareName()
+    {
+        (ModelCatalogService catalog, ProviderRegistry registry, _) =
+            BuildCatalog(new Dictionary<string, string[]> { ["customopenai"] = ["custom-coding-model"] });
+
+        await catalog.RefreshAvailableModels(CancellationToken.None);
+
+        Assert.Equal("customopenai", registry.ResolveProvider("custom-coding-model").Name);
+        Assert.Equal("customopenai", registry.ModelToProvider["custom-coding-model"].Name);
+        Assert.Equal("customopenai", registry.ModelToProvider["custom-coding-model@customopenai"].Name);
+        Assert.Contains("custom-coding-model", catalog.AvailableModels);
     }
 
     [Fact]

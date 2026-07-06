@@ -8,6 +8,12 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="bin\**;obj\**;artifacts\**" />
+    <Content Remove="bin\**;obj\**;artifacts\**" />
+    <None Remove="bin\**;obj\**;artifacts\**" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="coverlet.collector" Version="6.0.4" />
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.0-preview.5.25277.114" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />

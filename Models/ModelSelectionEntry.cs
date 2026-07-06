@@ -1,1 +1,6 @@
-public record struct ModelSelectionEntry(string Match, int Priority, bool Enabled, ModelExecutionConfig Execution);
+public record struct ModelSelectionEntry(
+    string Match,
+    int Priority,
+    bool Enabled,
+    ModelExecutionConfig Execution,
+    string? DisplayName = null);

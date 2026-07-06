@@ -1,0 +1,53 @@
+{
+  "provider": "qwen",
+  "models": [
+    {
+      "match": "qwen3-coder-plus",
+      "display_name": "Qwen Coder",
+      "priority": 1,
+      "enabled": true,
+      "execution": {
+        "context_length": 1000000,
+        "max_output_tokens": 65536,
+        "supports_tools": true,
+        "supports_vision": false,
+        "family": "qwen",
+        "temperature": 0.2,
+        "max_tokens": 16384,
+        "timeout_seconds": 240
+      }
+    },
+    {
+      "match": "qwen-plus",
+      "display_name": "Qwen Plus",
+      "priority": 2,
+      "enabled": true,
+      "execution": {
+        "context_length": 1000000,
+        "max_output_tokens": 8192,
+        "supports_tools": true,
+        "supports_vision": false,
+        "family": "qwen",
+        "temperature": 0.2,
+        "max_tokens": 8192,
+        "timeout_seconds": 180
+      }
+    },
+    {
+      "match": "qwen-turbo",
+      "display_name": "Qwen Turbo",
+      "priority": 3,
+      "enabled": true,
+      "execution": {
+        "context_length": 1000000,
+        "max_output_tokens": 8192,
+        "supports_tools": true,
+        "supports_vision": false,
+        "family": "qwen",
+        "temperature": 0.2,
+        "max_tokens": 8192,
+        "timeout_seconds": 180
+      }
+    }
+  ]
+}

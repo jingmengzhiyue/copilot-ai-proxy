@@ -1,0 +1,21 @@
+{
+  "provider": "customopenai",
+  "models": [
+    {
+      "match": "custom-coding-model",
+      "display_name": "Custom Coding Model",
+      "priority": 1,
+      "enabled": true,
+      "execution": {
+        "context_length": 128000,
+        "max_output_tokens": 8192,
+        "supports_tools": true,
+        "supports_vision": false,
+        "family": "custom-openai",
+        "temperature": 0.2,
+        "max_tokens": 8192,
+        "timeout_seconds": 180
+      }
+    }
+  ]
+}

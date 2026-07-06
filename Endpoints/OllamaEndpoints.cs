@@ -22,7 +22,7 @@ internal static class OllamaEndpoints
                 providerRegistry.Providers.Select(p => p.Name),
                 StringComparer.OrdinalIgnoreCase);
 
-            List<(string Provider, string Model, int Priority)> configuredEnabled = [];
+            List<(string Provider, string Model, int Priority, string? DisplayName)> configuredEnabled = [];
             foreach ((string providerName, ModelSelectionEntry[] entries) in modelSelectionStore.ProviderModelSelections)
             {
                 if (!activeProviders.Contains(providerName))
@@ -33,7 +33,7 @@ internal static class OllamaEndpoints
                     if (!entry.Enabled)
                         continue;
 
-                    configuredEnabled.Add((providerName, entry.Match, entry.Priority));
+                    configuredEnabled.Add((providerName, entry.Match, entry.Priority, entry.DisplayName));
                 }
             }
 
@@ -56,7 +56,10 @@ internal static class OllamaEndpoints
                     x.Provider,
                     x.Model,
                     x.Priority,
-                    DisplayModel = NormalizeModelForDisplay(x.Model)
+                    x.DisplayName,
+                    DisplayModel = string.IsNullOrWhiteSpace(x.DisplayName)
+                        ? NormalizeModelForDisplay(x.Model)
+                        : x.DisplayName.Trim()
                 })
                 .GroupBy(x => $"{x.Provider.ToLowerInvariant()}::{x.DisplayModel.ToLowerInvariant()}")
                 .Select(g => g
@@ -74,14 +77,19 @@ internal static class OllamaEndpoints
                 models = curated.Select(x =>
                 {
                     string providerPrefix = x.Provider.ToUpperInvariant();
-                    string displayName = $"{providerPrefix} - {x.DisplayModel}";
-                    string routedModel = x.Model;
+                    bool hasCustomDisplayName = !string.IsNullOrWhiteSpace(x.DisplayName);
+                    string displayName = hasCustomDisplayName
+                        ? x.DisplayModel
+                        : $"{providerPrefix} - {x.DisplayModel}";
+                    string routedModel = hasCustomDisplayName ? x.DisplayModel : x.Model;
+                    string upstreamModel = x.Model;
                     // Use a provider-qualified alias so that when the client sends this back
                     // as the model name, the proxy routes it uniquely to the correct provider
                     // instead of falling back to the default (e.g. DeepSeek).
                     string qualifiedModel = $"{routedModel}@{x.Provider}:latest";
+                    string qualifiedUpstreamModel = $"{upstreamModel}@{x.Provider}:latest";
 
-                    (int ContextLength, int MaxOutputTokens, bool SupportsTools, bool SupportsVision, string[] Capabilities, string Family) p = modelCatalog.GetModelProfile(routedModel);
+                    (int ContextLength, int MaxOutputTokens, bool SupportsTools, bool SupportsVision, string[] Capabilities, string Family) p = modelCatalog.GetModelProfile(upstreamModel);
                     return new
                     {
                         name = displayName + ":latest",
@@ -89,7 +97,9 @@ internal static class OllamaEndpoints
                         // don't expect the @provider form will match easily.
                         model = routedModel + ":latest",
                         // Keep the provider-qualified alias in case clients need it for routing.
-                        aliases = new[] { routedModel, qualifiedModel },
+                        aliases = new[] { routedModel, qualifiedModel, upstreamModel, qualifiedUpstreamModel }
+                            .Distinct(StringComparer.OrdinalIgnoreCase)
+                            .ToArray(),
                         modified_at = DateTime.UtcNow.ToString("o"),
                         size = 3_826_793_677L,
                         digest = "sha256:0000000000000000000000000000000000000000000000000000000000000000",
@@ -114,7 +124,7 @@ internal static class OllamaEndpoints
                             model_info = new Dictionary<string, object?>
                             {
                                 ["general.architecture"] = p.Family,
-                                ["general.basename"] = routedModel,
+                                ["general.basename"] = upstreamModel,
                                 ["general.context_length"] = p.ContextLength,
                                 ["context_length"] = p.ContextLength,
                                 ["max_output_tokens"] = p.MaxOutputTokens,

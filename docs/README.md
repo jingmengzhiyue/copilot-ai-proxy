@@ -1,8 +1,57 @@
 # Copilot Ollama Multi-Provider AI Proxy (Visual Studio 2026 / Visual Stuido Code / etc.)
 
-> The fastest way to run DeepSeek, OpenAI, NVIDIA, Groq, OpenRouter, Moonshot/Kimi, Cerebras, ZenMux, and Ollama models in GitHub Copilot, VS BYOM, and Ollama clients — **curated for coding inside Visual Studio 2026**.
+> Current provider support: DeepSeek, OpenAI, Zhipu/BigModel, Qwen/DashScope, NVIDIA NIM, Groq, OpenRouter, Ollama Cloud/local Ollama, Moonshot/Kimi, Cerebras, ZenMux, Google, and a generic `customopenai` slot for any OpenAI-compatible API.
 
-**As of June 2026** — Tested with Visual Studio 2026 Insider Edition · .NET 10 · 336 tests passing
+For OpenAI-compatible providers, two pieces of configuration are required:
+
+1. Set the provider API key and, when needed, its base URL in `.env`.
+2. Ensure the model is enabled in `config/model-selection/{provider}.json`.
+
+The proxy discovers live upstream models from `/v1/models` or the provider-specific models path, then exposes only the models that also match the local JSON allowlist. This is why simply typing an arbitrary model name in Copilot is not enough.
+
+Quick examples:
+
+```bash
+# Zhipu / BigModel, compatible with the request shape in the question.
+PROVIDER_ZHIPU_API_KEY=your-bigmodel-key
+# Optional default:
+PROVIDER_ZHIPU_BASE_URL=https://open.bigmodel.cn/api/paas
+
+# Qwen / DashScope compatible mode.
+PROVIDER_QWEN_API_KEY=your-dashscope-key
+# Optional default:
+PROVIDER_QWEN_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode
+
+# Any other OpenAI-compatible service.
+# BASE_URL is required for customopenai because there is no universal default.
+PROVIDER_CUSTOMOPENAI_API_KEY=your-provider-key
+PROVIDER_CUSTOMOPENAI_BASE_URL=https://your-provider.example.com
+```
+
+Built-in model examples:
+
+```text
+glm-5.2                 # Zhipu / BigModel
+qwen3-coder-plus        # Qwen / DashScope
+custom-coding-model     # Example placeholder in customopenai.json; replace it with your real model id
+```
+
+Direct proxy call for Zhipu `glm-5.2`:
+
+```bash
+curl http://localhost:11434/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "glm-5.2",
+    "messages": [{"role": "user", "content": "Introduce yourself briefly."}],
+    "temperature": 1.0,
+    "stream": true
+  }'
+```
+
+> The fastest way to run DeepSeek, OpenAI, Zhipu/BigModel, Qwen/DashScope, NVIDIA, Groq, OpenRouter, Moonshot/Kimi, Cerebras, ZenMux, Google, Ollama, and generic OpenAI-compatible models in GitHub Copilot, VS BYOM, and Ollama clients.
+
+**As of June 2026** — Tested with Visual Studio 2026 Insider Edition · .NET 10 · xUnit test suite
 
 **Known Issues**
 <img src="/33kIssue.png">
@@ -10,11 +59,11 @@ Even /api/show or /api/tags is correct
 https://github.com/microsoft/vscode/issues/299907
 
 
-A high-performance, ultra-low-overhead HTTP proxy that connects GitHub Copilot and Ollama clients to **9 AI providers**: DeepSeek, OpenAI, NVIDIA, Groq, OpenRouter, Moonshot/Kimi, Cerebras, ZenMux, and Ollama Cloud. Built with .NET 10 and ASP.NET Core minimal APIs for maximum throughput and minimal allocations.
+A high-performance, ultra-low-overhead HTTP proxy that connects GitHub Copilot and Ollama clients to DeepSeek, OpenAI, Zhipu/BigModel, Qwen/DashScope, NVIDIA, Groq, OpenRouter, Moonshot/Kimi, Cerebras, ZenMux, Google, Ollama Cloud/local Ollama, and generic OpenAI-compatible providers. Built with .NET 10 and ASP.NET Core minimal APIs for maximum throughput and minimal allocations.
 
 | 🏗️ | Details |
 |---|---|
-| **Providers** | DeepSeek, OpenAI, NVIDIA NIM, Groq, OpenRouter, Ollama Cloud, Moonshot/Kimi, Cerebras, ZenMux |
+| **Providers** | DeepSeek, OpenAI, Zhipu/BigModel, Qwen/DashScope, NVIDIA NIM, Groq, OpenRouter, Ollama Cloud/local Ollama, Moonshot/Kimi, Cerebras, ZenMux, Google, generic OpenAI-compatible |
 | **Models** | Auto-discovered from each provider; curated to **5-15 enabled per provider** for coding |
 | **Default Port** | `11434` |
 | **Framework** | .NET 10 |
@@ -24,7 +73,7 @@ A high-performance, ultra-low-overhead HTTP proxy that connects GitHub Copilot a
 ## Key Features
 
 - **🧠 Reasoning Content Caching** — Automatically captures DeepSeek's `reasoning_content` and re-injects it on subsequent messages for true multi-turn reasoning
-- **🌐 Multi-Provider Support (9 providers)** — Route requests to any provider based on model name
+- **🌐 Multi-Provider Support** — Route requests to any configured provider based on model name
 - **🔄 Dual API Compatibility**
   - **OpenAI-compatible** (`/v1/chat/completions`) — works with GitHub Copilot, Cursor, Continue.dev, any OpenAI SDK
   - **Ollama-compatible** (`/api/chat`, `/api/tags`, `/api/show`) — works with VS BYOM and Ollama clients
@@ -67,7 +116,7 @@ PROVIDER_CEREBRAS_API_KEY=csk-...
 PROVIDER_ZENMUX_API_KEY=your-zenmux-key-here
 
 PROXY_PORT=11434                    # (optional)
-DEFAULT_MODEL=deepseek-v4-pro       # (optional)
+DEEPSEEK_MODEL=deepseek-v4-pro      # (optional default model)
 ```
 
 `.env` is git-ignored and never committed. Only `.env.example` is tracked.
@@ -84,7 +133,7 @@ docker compose up -d
 dotnet run
 ```
 
-You should see startup output listing the 9 providers (whichever have keys) and ~60 curated models.
+You should see startup output listing the configured providers and curated models.
 
 ## API Reference
 
@@ -183,7 +232,7 @@ Top picks for coding in VS 2026:
 - **Streaming:** Zero-copy pass-through (minimal memory overhead)
 - **Model metadata:** Loaded once on startup, cached in RAM
 - **Typical latency:** <10ms proxy overhead
-- **Test coverage:** 336 tests covering endpoints, parameters, model selection, transformations, force-mode, hint resolution
+- **Test coverage:** xUnit tests cover endpoints, parameters, model selection, transformations, force-mode, hint resolution, and OpenAI-compatible provider registration
 
 ## Testing
 
@@ -228,6 +277,9 @@ Each provider exposes a curated set of enabled models, prioritised for coding.
 |----------|----------:|-----------|-------|
 | **DeepSeek** | 2 | deepseek-v4-pro, deepseek-v4-flash | 1M context, native reasoning |
 | **OpenAI** | 5 | gpt-5, gpt-5-mini, gpt-4.1, gpt-4o, gpt-oss-120b | o-series support |
+| **Zhipu/BigModel** | 3 | glm-5.2, glm-4.5, glm-4-plus | OpenAI-compatible `v4/chat/completions` |
+| **Qwen/DashScope** | 3 | qwen3-coder-plus, qwen-plus, qwen-turbo | DashScope compatible mode |
+| **Generic OpenAI-compatible** | 1 example | custom-coding-model | Replace with your provider's real model id |
 | **NVIDIA NIM** | 5 | qwen3-coder-480b, kimi-k2.6, nemotron-3-super, gpt-oss-120b, qwen3.5-397b | 1M context, all top coding picks |
 | **Groq** | 5 | llama-3.3-70b-versatile, qwen3-32b, llama-4-scout, gpt-oss-120b, gpt-oss-20b | Speed-optimised inference |
 | **OpenRouter** | 7 | qwen3-coder, nemotron-3-super, nemotron-3-ultra, kimi-k2.6, deepseek-v4-pro | Multi-backend passthrough |

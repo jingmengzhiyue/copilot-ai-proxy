@@ -1,6 +1,6 @@
 # Configuration Guide
 
-Complete configuration documentation for the multi-provider proxy supporting DeepSeek, OpenAI, NVIDIA NIM, Groq, OpenRouter, Moonshot/Kimi, Cerebras, Ollama Cloud, and ZenMux.
+Complete configuration documentation for the multi-provider proxy supporting DeepSeek, OpenAI, Zhipu/BigModel, Qwen/DashScope, NVIDIA NIM, Groq, OpenRouter, Moonshot/Kimi, Cerebras, Ollama Cloud/local Ollama, ZenMux, Google, and generic OpenAI-compatible providers.
 
 ## Table of Contents
 
@@ -25,7 +25,7 @@ Provider API keys must be set as environment variables. The proxy reads from:
 2. System environment variables
 3. `appsettings.json`
 
-**Discovery order:** `deepseek, openai, nvidia, openrouter, groq, ollama, moonshot, cerebras, zenmux`
+**Discovery order:** `deepseek, openai, moonshot, google, zhipu, qwen, customopenai, cerebras, nvidia, openrouter, groq, zenmux, ollama`
 
 ### Provider Configuration
 
@@ -39,6 +39,19 @@ PROVIDER_DEEPSEEK_BASE_URL=https://api.deepseek.com
 # ── OpenAI ─────────────────────────────────────────────────────────
 PROVIDER_OPENAI_API_KEY=sk-your-openai-key
 PROVIDER_OPENAI_BASE_URL=https://api.openai.com
+
+# Zhipu / BigModel
+PROVIDER_ZHIPU_API_KEY=your-zhipu-bigmodel-key
+PROVIDER_ZHIPU_BASE_URL=https://open.bigmodel.cn/api/paas
+
+# Qwen / DashScope compatible mode
+PROVIDER_QWEN_API_KEY=your-dashscope-key
+PROVIDER_QWEN_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode
+
+# Generic OpenAI-compatible provider
+# BASE_URL is required because there is no safe universal default.
+PROVIDER_CUSTOMOPENAI_API_KEY=your-provider-key
+PROVIDER_CUSTOMOPENAI_BASE_URL=https://your-provider.example.com
 
 # ── NVIDIA NIM ─────────────────────────────────────────────────────
 PROVIDER_NVIDIA_API_KEY=nvapi-your-nvidia-key
@@ -79,6 +92,9 @@ PROXY_API_KEY=          # optional: set to require auth on the proxy
 |----------|-----------------|-------|
 | DeepSeek | `https://api.deepseek.com` | - |
 | OpenAI | `https://api.openai.com` | - |
+| Zhipu / BigModel | `https://open.bigmodel.cn/api/paas` | OpenAI-compatible path prefix; chat uses `v4/chat/completions` |
+| Qwen / DashScope | `https://dashscope.aliyuncs.com/compatible-mode` | OpenAI-compatible mode |
+| Generic OpenAI-compatible | none | `PROVIDER_CUSTOMOPENAI_BASE_URL` is required |
 | NVIDIA NIM | `https://integrate.api.nvidia.com` | - |
 | OpenRouter | `https://openrouter.ai/api` | OpenAI-compatible |
 | Groq | `https://api.groq.com/openai` | OpenAI-compatible |
@@ -96,6 +112,12 @@ PROXY_API_KEY=          # optional: set to require auth on the proxy
 ### Configuration Files
 
 Model metadata lives in `config/model-selection/{provider}.json`:
+
+New OpenAI-compatible provider configuration files:
+
+- `config/model-selection/zhipu.json` - Zhipu / BigModel models such as `glm-5.2`.
+- `config/model-selection/qwen.json` - Qwen / DashScope compatible-mode models such as `qwen3-coder-plus`.
+- `config/model-selection/customopenai.json` - user-defined OpenAI-compatible models; replace the example model id with one returned by your provider.
 
 ```
 config/model-selection/
@@ -119,6 +141,7 @@ config/model-selection/
   "models": [
     {
       "match": "glm-5.2-free",
+      "display_name": "GLM 5.2 Free",
       "priority": 1,
       "enabled": true,
       "execution": {
@@ -143,6 +166,7 @@ config/model-selection/
 |-------|------|----------|-------------|
 | `provider` | string | Yes | Provider name (must match registry) |
 | `models[].match` | string | Yes | Model name substring to match |
+| `models[].display_name` | string | No | Short user-facing alias shown in model lists and accepted in requests |
 | `models[].priority` | int | Yes | Priority order (lower = higher priority) |
 | `models[].enabled` | bool | Yes | Include in model lists |
 | `models[].execution.context_length` | int | No | Max context window in tokens |
@@ -165,6 +189,69 @@ Currently enabled for:
 - Moonshot `kimi-k2.7-code`, `kimi-k2.6`, `kimi-k2.5`
 - Ollama Cloud `kimi2.7-code`, `kimi-k2.6`
 - ZenMux `kimi-k2.7-code-free`, `kimi-k2.6`
+
+---
+
+### Adding an OpenAI-Compatible Model
+
+Use this flow for Zhipu, Qwen, or any provider whose API looks like OpenAI chat completions.
+
+1. Configure the provider in `.env`.
+
+```bash
+# Zhipu / BigModel
+PROVIDER_ZHIPU_API_KEY=your-bigmodel-key
+
+# Qwen / DashScope
+PROVIDER_QWEN_API_KEY=your-dashscope-key
+
+# Generic provider; base URL is required.
+PROVIDER_CUSTOMOPENAI_API_KEY=your-provider-key
+PROVIDER_CUSTOMOPENAI_BASE_URL=https://your-provider.example.com
+```
+
+2. Enable the model in the matching JSON file.
+
+For the Zhipu curl example:
+
+```json
+{
+  "provider": "zhipu",
+  "models": [
+    {
+      "match": "glm-5.2",
+      "priority": 1,
+      "enabled": true,
+      "execution": {
+        "context_length": 1000000,
+        "max_output_tokens": 65536,
+        "supports_tools": true,
+        "family": "z-ai",
+        "temperature": 1.0,
+        "max_tokens": 16384,
+        "timeout_seconds": 240
+      }
+    }
+  ]
+}
+```
+
+3. Restart the proxy.
+
+The proxy does not hot-reload `config/model-selection/*.json`. After restart, check `GET http://localhost:11434/v1/models` or `GET http://localhost:11434/api/tags`. If the model is missing, confirm both conditions are true: the upstream `/models` endpoint returns the model id, and the local JSON `match` value is a substring of that id.
+
+4. Use the model from your client.
+
+```json
+{
+  "model": "glm-5.2",
+  "messages": [
+    { "role": "user", "content": "Introduce yourself briefly." }
+  ],
+  "temperature": 1.0,
+  "stream": true
+}
+```
 
 ---
 

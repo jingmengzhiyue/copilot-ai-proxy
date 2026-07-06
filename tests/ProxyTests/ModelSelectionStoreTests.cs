@@ -123,6 +123,9 @@ public class ModelSelectionStoreTests
         Assert.True(store.ProviderModelSelections.ContainsKey("moonshot"));
         Assert.True(store.ProviderModelSelections.ContainsKey("openrouter"));
         Assert.True(store.ProviderModelSelections.ContainsKey("ollama"));
+        Assert.True(store.ProviderModelSelections.ContainsKey("zhipu"));
+        Assert.True(store.ProviderModelSelections.ContainsKey("qwen"));
+        Assert.True(store.ProviderModelSelections.ContainsKey("customopenai"));
     }
 
     [Fact]
@@ -374,5 +377,63 @@ public class ModelSelectionStoreTests
         ModelSelectionEntry[] entries = store.GetProviderModelSelections("cerebras");
 
         Assert.NotEmpty(entries);
+    }
+
+    [Fact]
+    public void FindModelSelectionEntry_Zhipu_Glm52_FindsEntry()
+    {
+        ModelSelectionStore store = new();
+
+        ModelSelectionEntry? entry = store.FindModelSelectionEntry("glm-5.2", "zhipu");
+
+        Assert.NotNull(entry);
+        Assert.Equal("glm-5.2", entry.Value.Match);
+        Assert.Equal("z-ai", entry.Value.Execution.Family);
+    }
+
+    [Fact]
+    public void FindModelSelectionEntry_Zhipu_Glm52_HasDisplayName()
+    {
+        ModelSelectionStore store = new();
+
+        ModelSelectionEntry? entry = store.FindModelSelectionEntry("glm-5.2", "zhipu");
+
+        Assert.NotNull(entry);
+        Assert.Equal("GLM 5.2", entry.Value.DisplayName);
+    }
+
+    [Fact]
+    public void FindModelSelectionEntry_Qwen_Qwen3Coder_FindsEntry()
+    {
+        ModelSelectionStore store = new();
+
+        ModelSelectionEntry? entry = store.FindModelSelectionEntry("qwen3-coder-plus", "qwen");
+
+        Assert.NotNull(entry);
+        Assert.Equal("qwen3-coder-plus", entry.Value.Match);
+        Assert.Equal("qwen", entry.Value.Execution.Family);
+    }
+
+    [Fact]
+    public void FindModelSelectionEntry_Qwen_Qwen3Coder_HasDisplayName()
+    {
+        ModelSelectionStore store = new();
+
+        ModelSelectionEntry? entry = store.FindModelSelectionEntry("qwen3-coder-plus", "qwen");
+
+        Assert.NotNull(entry);
+        Assert.Equal("Qwen Coder", entry.Value.DisplayName);
+    }
+
+    [Fact]
+    public void FindModelSelectionEntry_CustomOpenAi_ExampleModel_FindsEntry()
+    {
+        ModelSelectionStore store = new();
+
+        ModelSelectionEntry? entry = store.FindModelSelectionEntry("custom-coding-model", "customopenai");
+
+        Assert.NotNull(entry);
+        Assert.Equal("custom-coding-model", entry.Value.Match);
+        Assert.Equal("custom-openai", entry.Value.Execution.Family);
     }
 }

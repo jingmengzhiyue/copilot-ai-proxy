@@ -46,7 +46,8 @@ internal sealed class ModelCatalogService
                         continue;
                     }
 
-                    if (!_modelSelectionStore.IsPreferredModel(m, prov.Name))
+                    ModelSelectionEntry? selection = _modelSelectionStore.FindModelSelectionEntry(m, prov.Name);
+                    if (!selection.HasValue)
                     {
                         continue;
                     }
@@ -57,13 +58,13 @@ internal sealed class ModelCatalogService
                         continue;
                     }
 
-                    int prio = _modelSelectionStore.GetPreferredModelPriority(m, prov.Name);
+                    int prio = selection.Value.Priority;
                     if (!claimsByUpstream.TryGetValue(m, out List<Claimant>? list))
                     {
                         list = [];
                         claimsByUpstream[m] = list;
                     }
-                    list.Add(new Claimant(prov, m, prio));
+                    list.Add(new Claimant(prov, m, prio, NormalizeDisplayName(selection.Value.DisplayName)));
                 }
             }
 
@@ -94,22 +95,22 @@ internal sealed class ModelCatalogService
                 foreach (Claimant c in ordered)
                 {
                     string qualified = $"{c.UpstreamId}@{c.Provider.Name}";
-                    if (!newMap.ContainsKey(qualified))
+                    AddModelAlias(qualified, c.Provider, c.UpstreamId, newMap, newUpstream, allModels);
+
+                    if (HasDisplayAlias(c))
                     {
-                        newMap[qualified] = c.Provider;
-                        newUpstream[qualified] = c.UpstreamId;
-                        allModels.Add(qualified);
+                        AddModelAlias($"{c.DisplayName}@{c.Provider.Name}", c.Provider, c.UpstreamId, newMap, newUpstream, allModels);
                     }
                 }
 
                 // Bare name: lowest priority (then configured order) wins.
                 Claimant winner = ordered[0];
                 string bare = winner.UpstreamId;
-                if (!newMap.ContainsKey(bare))
+                AddModelAlias(bare, winner.Provider, bare, newMap, newUpstream, allModels);
+
+                if (HasDisplayAlias(winner))
                 {
-                    newMap[bare] = winner.Provider;
-                    newUpstream[bare] = bare;
-                    allModels.Add(bare);
+                    AddModelAlias(winner.DisplayName!, winner.Provider, winner.UpstreamId, newMap, newUpstream, allModels);
                 }
             }
 
@@ -142,7 +143,32 @@ internal sealed class ModelCatalogService
         }
     }
 
-    private readonly record struct Claimant(ProviderInfo Provider, string UpstreamId, int Priority);
+    private readonly record struct Claimant(ProviderInfo Provider, string UpstreamId, int Priority, string? DisplayName);
+
+    private static void AddModelAlias(
+        string alias,
+        ProviderInfo provider,
+        string upstreamId,
+        Dictionary<string, ProviderInfo> modelToProvider,
+        Dictionary<string, string> modelToUpstream,
+        List<string> allModels)
+    {
+        if (string.IsNullOrWhiteSpace(alias) || modelToProvider.ContainsKey(alias))
+        {
+            return;
+        }
+
+        modelToProvider[alias] = provider;
+        modelToUpstream[alias] = upstreamId;
+        allModels.Add(alias);
+    }
+
+    private static string? NormalizeDisplayName(string? displayName) =>
+        string.IsNullOrWhiteSpace(displayName) ? null : displayName.Trim();
+
+    private static bool HasDisplayAlias(Claimant claimant) =>
+        !string.IsNullOrWhiteSpace(claimant.DisplayName)
+        && !string.Equals(claimant.DisplayName, claimant.UpstreamId, StringComparison.OrdinalIgnoreCase);
 
     private sealed class ProviderInfoNameComparer : IEqualityComparer<ProviderInfo>
     {
@@ -155,8 +181,9 @@ internal sealed class ModelCatalogService
 
     internal (int ContextLength, int MaxOutputTokens, bool SupportsTools, bool SupportsVision, string[] Capabilities, string Family) GetModelProfile(string model)
     {
-        ModelExecutionConfig configured = _modelSelectionStore.GetExecutionConfigForModel(model, _providerRegistry.ModelToProvider);
-        string m = model.ToLowerInvariant();
+        string configModel = ResolveConfigModel(model);
+        ModelExecutionConfig configured = _modelSelectionStore.GetExecutionConfigForModel(configModel, _providerRegistry.ModelToProvider);
+        string m = configModel.ToLowerInvariant();
         bool tools = configured.SupportsTools ?? true;
         bool vision = configured.SupportsVision ?? (m.Contains("vision") || m.Contains("-vl") || m.Contains("neva") || m.Contains("vila") || m.Contains("fuyu") || m.Contains("kosmos"));
         int ctx;
@@ -253,7 +280,7 @@ internal sealed class ModelCatalogService
 
     internal CancellationTokenSource? CreateModelTimeoutCts(string model, CancellationToken outer)
     {
-        ModelExecutionConfig exec = _modelSelectionStore.GetExecutionConfigForModel(model, _providerRegistry.ModelToProvider);
+        ModelExecutionConfig exec = _modelSelectionStore.GetExecutionConfigForModel(ResolveConfigModel(model), _providerRegistry.ModelToProvider);
         if (!exec.TimeoutSeconds.HasValue || exec.TimeoutSeconds.Value <= 0)
         {
             return null;
@@ -265,7 +292,10 @@ internal sealed class ModelCatalogService
     }
 
     internal ModelExecutionConfig GetExecutionConfigForModel(string model) =>
-        _modelSelectionStore.GetExecutionConfigForModel(model, _providerRegistry.ModelToProvider);
+        _modelSelectionStore.GetExecutionConfigForModel(ResolveConfigModel(model), _providerRegistry.ModelToProvider);
+
+    private string ResolveConfigModel(string model) =>
+        _providerRegistry.ModelToUpstream.TryGetValue(model, out string? upstream) ? upstream : model;
 
     /// <summary>
     /// Ensures the configured default model (from DEEPSEEK_MODEL env var) is always in

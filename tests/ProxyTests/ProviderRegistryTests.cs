@@ -118,6 +118,58 @@ public class ProviderRegistryTests
     }
 
     [Fact]
+    public void DiscoverProviders_CustomOpenAiWithoutBaseUrl_IsSkipped()
+    {
+        string? oldCustomKey = Environment.GetEnvironmentVariable("PROVIDER_CUSTOMOPENAI_API_KEY");
+        string? oldCustomBase = Environment.GetEnvironmentVariable("PROVIDER_CUSTOMOPENAI_BASE_URL");
+        string? oldDeepseekKey = Environment.GetEnvironmentVariable("PROVIDER_DEEPSEEK_API_KEY");
+        string? oldLegacyDeepseekKey = Environment.GetEnvironmentVariable("DEEPSEEK_API_KEY");
+
+        try
+        {
+            Environment.SetEnvironmentVariable("PROVIDER_CUSTOMOPENAI_API_KEY", "test-key");
+            Environment.SetEnvironmentVariable("PROVIDER_CUSTOMOPENAI_BASE_URL", null);
+            Environment.SetEnvironmentVariable("PROVIDER_DEEPSEEK_API_KEY", null);
+            Environment.SetEnvironmentVariable("DEEPSEEK_API_KEY", null);
+
+            ProviderHttpClientFactory factory = new();
+            ProviderRegistry registry = new(factory);
+
+            Assert.DoesNotContain(registry.Providers, p => p.Name.Equals("customopenai", StringComparison.OrdinalIgnoreCase));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("PROVIDER_CUSTOMOPENAI_API_KEY", oldCustomKey);
+            Environment.SetEnvironmentVariable("PROVIDER_CUSTOMOPENAI_BASE_URL", oldCustomBase);
+            Environment.SetEnvironmentVariable("PROVIDER_DEEPSEEK_API_KEY", oldDeepseekKey);
+            Environment.SetEnvironmentVariable("DEEPSEEK_API_KEY", oldLegacyDeepseekKey);
+        }
+    }
+
+    [Theory]
+    [InlineData("zhipu", "ZHIPU", "https://open.bigmodel.cn/api/paas", "v4/chat/completions", "v4/models")]
+    [InlineData("qwen", "QWEN", "https://dashscope.aliyuncs.com/compatible-mode", "v1/chat/completions", "v1/models")]
+    [InlineData("customopenai", "CUSTOMOPENAI", "", "v1/chat/completions", "v1/models")]
+    public void ProviderCapabilitiesRegistry_OpenAiCompatibleProviders_AreRegistered(
+        string providerName,
+        string envPrefix,
+        string defaultBaseUrl,
+        string chatPath,
+        string modelsPath)
+    {
+        ProviderCapabilities caps = ProviderCapabilitiesRegistry.Get(providerName);
+
+        Assert.Equal(ApiFormat.OpenAi, caps.ApiFormat);
+        Assert.Equal(ProviderCategory.Direct, caps.Category);
+        Assert.False(caps.SupportsReasoningEffort);
+        Assert.False(caps.SupportsTopK);
+        Assert.Equal(envPrefix, caps.EnvPrefix);
+        Assert.Equal(defaultBaseUrl, caps.DefaultBaseUrl);
+        Assert.Equal(chatPath, caps.ChatPath);
+        Assert.Equal(modelsPath, caps.ModelsPath);
+    }
+
+    [Fact]
     public void ModelToProvider_IsNotNull()
     {
         ProviderHttpClientFactory factory = new();

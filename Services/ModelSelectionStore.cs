@@ -176,6 +176,9 @@ internal sealed class ModelSelectionStore
                         int priority = item.TryGetProperty("priority", out JsonElement priE) && priE.ValueKind == JsonValueKind.Number
                             ? priE.GetInt32() : idx;
                         bool enabled = !item.TryGetProperty("enabled", out JsonElement enE) || enE.ValueKind != JsonValueKind.False;
+                        string? displayName = item.TryGetProperty("display_name", out JsonElement displayE) && displayE.ValueKind == JsonValueKind.String
+                            ? displayE.GetString()
+                            : null;
 
                         ModelExecutionConfig exec = new();
                         if (item.TryGetProperty("execution", out JsonElement execE) && execE.ValueKind == JsonValueKind.Object)
@@ -196,7 +199,7 @@ internal sealed class ModelSelectionStore
                             );
                         }
 
-                        entries.Add(new ModelSelectionEntry(matchValue!, priority, enabled, exec));
+                        entries.Add(new ModelSelectionEntry(matchValue!, priority, enabled, exec, displayName));
                     }
 
                     if (entries.Count > 0)

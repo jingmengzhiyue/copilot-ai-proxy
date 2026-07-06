@@ -9,7 +9,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Remove="tests/**/*.cs;**/obj/**/*.cs;**/bin/**/*.cs" />
+    <Compile Remove="tests/**/*.cs;**/obj/**/*.cs;**/bin/**/*.cs;artifacts\**\*.cs" />
+    <Content Remove="bin\**;obj\**;tests\**\bin\**;tests\**\obj\**;artifacts\**" />
+    <None Remove="bin\**;obj\**;tests\**\bin\**;tests\**\obj\**;artifacts\**" />
   </ItemGroup>
 
   <ItemGroup>

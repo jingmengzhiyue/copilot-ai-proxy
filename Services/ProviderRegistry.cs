@@ -205,6 +205,11 @@ internal sealed class ProviderRegistry
             string baseUrl = string.IsNullOrWhiteSpace(configuredBaseUrl)
                 ? caps.DefaultBaseUrl
                 : configuredBaseUrl;
+            if (string.IsNullOrWhiteSpace(baseUrl))
+            {
+                Console.WriteLine($"Provider '{providerName}' is configured with an API key but no base URL. Set PROVIDER_{prefix}_BASE_URL to enable it.");
+                continue;
+            }
 
             HttpClient provClient = httpClientFactory.CreateProviderClient(providerName, baseUrl, apiKey);
             _providers.Add(new ProviderInfo(providerName, apiKey, baseUrl, provClient, caps));

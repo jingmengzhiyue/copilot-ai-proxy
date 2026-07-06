@@ -50,6 +50,36 @@ internal static class ProviderCapabilitiesRegistry
             DefaultBaseUrl: "https://generativelanguage.googleapis.com",
             EnvPrefix: "GOOGLE"),
 
+        ["zhipu"] = new(
+            Category: ProviderCategory.Direct,
+            ApiFormat: ApiFormat.OpenAi,
+            SupportsReasoningEffort: false,
+            SupportsTopK: false,
+            ChatPath: "v4/chat/completions",
+            ModelsPath: "v4/models",
+            DefaultBaseUrl: "https://open.bigmodel.cn/api/paas",
+            EnvPrefix: "ZHIPU"),
+
+        ["qwen"] = new(
+            Category: ProviderCategory.Direct,
+            ApiFormat: ApiFormat.OpenAi,
+            SupportsReasoningEffort: false,
+            SupportsTopK: false,
+            ChatPath: "v1/chat/completions",
+            ModelsPath: "v1/models",
+            DefaultBaseUrl: "https://dashscope.aliyuncs.com/compatible-mode",
+            EnvPrefix: "QWEN"),
+
+        ["customopenai"] = new(
+            Category: ProviderCategory.Direct,
+            ApiFormat: ApiFormat.OpenAi,
+            SupportsReasoningEffort: false,
+            SupportsTopK: false,
+            ChatPath: "v1/chat/completions",
+            ModelsPath: "v1/models",
+            DefaultBaseUrl: "",
+            EnvPrefix: "CUSTOMOPENAI"),
+
         ["cerebras"] = new(
             Category: ProviderCategory.Direct,
             ApiFormat: ApiFormat.OpenAi,
