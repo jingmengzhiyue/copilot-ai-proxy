@@ -290,6 +290,49 @@ Example:
 | `override_client_params` | When `true`, configured defaults overwrite client-supplied values. |
 | `supports_reasoning` | Optional metadata flag for reasoning-capable models. |
 
+### Mapping BYOM feature fields
+
+Some clients show model feature fields such as `Display Name`, `Model ID`,
+`Resource Endpoint`, two `Token limit` inputs, `Supports tool calling`, and
+`Supports image context`. Configure the same information in this project as
+follows:
+
+| Client field | Proxy configuration |
+|---|---|
+| Display Name | `models[].display_name` |
+| Model ID | `models[].match` |
+| Resource Endpoint | `PROVIDER_<PROVIDER>_BASE_URL` in `.env` |
+| Token limit, first value | `models[].execution.context_length` |
+| Token limit, second value | `models[].execution.max_output_tokens` |
+| Supports tool calling | `models[].execution.supports_tools` |
+| Supports image context | `models[].execution.supports_vision` |
+
+The two token limit values are intentionally separate. `context_length` is the
+input context window that clients can use for prompt and conversation sizing.
+`max_output_tokens` is the model's output capacity. `max_tokens` is different:
+it is the default output limit sent to the upstream provider when a client does
+not specify a request limit.
+
+### Image context support
+
+The proxy already supports image-capable OpenAI-style chat messages and
+Ollama-style image payloads. Enable image context per model with:
+
+```json
+{
+  "match": "provider-vision-model",
+  "execution": {
+    "supports_vision": true
+  }
+}
+```
+
+When `supports_vision` is `true`, Ollama-compatible metadata also exposes
+`supports_images: true`. Only enable this flag for models whose upstream API
+really accepts image input. If a provider releases a text-only model and the
+flag is enabled by mistake, clients may send image payloads that the upstream
+provider rejects.
+
 ## Adding new models
 
 Use the same flow for DeepSeek, Zhipu, Qwen, and other providers.
@@ -487,6 +530,7 @@ matching model JSON file, restart the proxy, and check `/api/show` or
 - `docs/ARCHITECTURE.md` - Internal architecture.
 - `docs/TESTING.md` - Test architecture and commands.
 - `docs/DEPLOYMENT.md` - Deployment notes.
+- `README.zh-CN.md` - Simplified Chinese README.
 
 ## License
 
