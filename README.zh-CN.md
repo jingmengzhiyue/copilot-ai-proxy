@@ -74,11 +74,11 @@ curl http://localhost:11434/v1/models
 curl http://localhost:11434/api/tags
 ```
 
-## 两个 token limit 是什么
+## 上下文和输出 token 配置
 
-截图里有两个 token limit 输入框，通常分别对应：
+本项目把模型的输入上下文窗口和最大输出能力分成两个字段配置：
 
-| 截图含义 | 本项目字段 | 说明 |
+| 能力 | 本项目字段 | 说明 |
 |---|---|---|
 | 输入上下文窗口 | `execution.context_length` | 模型最多能读取多少上下文，常对应 input token limit、num_ctx。 |
 | 最大输出能力 | `execution.max_output_tokens` | 模型理论最多能输出多少 token，常对应 output token limit。 |

@@ -290,28 +290,27 @@ Example:
 | `override_client_params` | When `true`, configured defaults overwrite client-supplied values. |
 | `supports_reasoning` | Optional metadata flag for reasoning-capable models. |
 
-### Mapping BYOM feature fields
+### Model capability metadata
 
-Some clients show model feature fields such as `Display Name`, `Model ID`,
-`Resource Endpoint`, two `Token limit` inputs, `Supports tool calling`, and
-`Supports image context`. Configure the same information in this project as
-follows:
+Each model entry can describe the model id, display name, endpoint provider,
+token limits, and feature support exposed to OpenAI-compatible and
+Ollama-compatible clients.
 
-| Client field | Proxy configuration |
+| Capability | Proxy configuration |
 |---|---|
-| Display Name | `models[].display_name` |
-| Model ID | `models[].match` |
-| Resource Endpoint | `PROVIDER_<PROVIDER>_BASE_URL` in `.env` |
-| Token limit, first value | `models[].execution.context_length` |
-| Token limit, second value | `models[].execution.max_output_tokens` |
-| Supports tool calling | `models[].execution.supports_tools` |
-| Supports image context | `models[].execution.supports_vision` |
+| User-facing model name | `models[].display_name` |
+| Upstream model id or match rule | `models[].match` |
+| Provider endpoint | `PROVIDER_<PROVIDER>_BASE_URL` in `.env` |
+| Input context window | `models[].execution.context_length` |
+| Maximum output capacity | `models[].execution.max_output_tokens` |
+| Tool calling support | `models[].execution.supports_tools` |
+| Image input support | `models[].execution.supports_vision` |
 
-The two token limit values are intentionally separate. `context_length` is the
-input context window that clients can use for prompt and conversation sizing.
-`max_output_tokens` is the model's output capacity. `max_tokens` is different:
-it is the default output limit sent to the upstream provider when a client does
-not specify a request limit.
+`context_length` and `max_output_tokens` are intentionally separate.
+`context_length` is the input context window that clients can use for prompt and
+conversation sizing. `max_output_tokens` is the model's output capacity.
+`max_tokens` is different: it is the default output limit sent to the upstream
+provider when a client does not specify a request limit.
 
 ### Image context support
 
