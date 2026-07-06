@@ -52,10 +52,57 @@ Only providers with configured credentials are active at runtime.
 
 ## Requirements
 
-- .NET 10 SDK, or Docker.
+- Release zip: no .NET SDK required.
+- Source build: .NET 10 SDK, or Docker.
 - At least one provider API key, unless you only use local Ollama.
 
+## Release builds
+
+For most users, the easiest installation path is a GitHub release zip. Each
+release package is self-contained and includes:
+
+- `ai-proxy-hub` or `ai-proxy-hub.exe`
+- `.env.example`
+- `config/model-selection/*.json`
+- `README.md`
+- `README.zh-CN.md`
+- A platform start script
+
+Download the package for your operating system:
+
+| Package | Use on |
+|---|---|
+| `copilot-ai-proxy-vX.Y.Z-win-x64.zip` | Windows x64 |
+| `copilot-ai-proxy-vX.Y.Z-linux-x64.zip` | Linux x64 |
+| `copilot-ai-proxy-vX.Y.Z-osx-x64.zip` | Intel macOS |
+| `copilot-ai-proxy-vX.Y.Z-osx-arm64.zip` | Apple Silicon macOS |
+
+Run it:
+
+```powershell
+# Windows
+Expand-Archive .\copilot-ai-proxy-vX.Y.Z-win-x64.zip
+cd .\copilot-ai-proxy-vX.Y.Z-win-x64
+.\start-windows.cmd
+```
+
+```bash
+# Linux/macOS
+unzip copilot-ai-proxy-vX.Y.Z-linux-x64.zip
+cd copilot-ai-proxy-vX.Y.Z-linux-x64
+chmod +x ./start-unix.sh ./ai-proxy-hub
+./start-unix.sh
+```
+
+On the first run, the start script creates `.env` from `.env.example` and asks
+you to edit it. Add at least one provider API key, then start the proxy again.
+
+You can change model metadata by editing `config/model-selection/*.json` in the
+same folder. Restart the proxy after changing `.env` or model JSON files.
+
 ## Quick start
+
+Use this path when you want to run from source.
 
 1. Copy the example environment file.
 
@@ -486,6 +533,24 @@ dotnet test --filter "FullyQualifiedName~ModelSelectionStoreTests"
 dotnet test --filter "FullyQualifiedName~ModelCatalogServiceTests"
 dotnet test --filter "FullyQualifiedName~ProviderRegistryTests"
 ```
+
+## Creating a release
+
+Maintainers can create local release packages with:
+
+```powershell
+.\scripts\package-release.ps1 -Version vX.Y.Z
+```
+
+To publish a GitHub release, push a version tag:
+
+```bash
+git tag vX.Y.Z
+git push origin vX.Y.Z
+```
+
+The `Release` workflow tests the project, creates self-contained packages for
+Windows, Linux, and macOS, and uploads the zip files to the GitHub release.
 
 ## Troubleshooting
 

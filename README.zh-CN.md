@@ -37,7 +37,52 @@ http://localhost:11434
 
 `customopenai` 必须额外配置 `PROVIDER_CUSTOMOPENAI_BASE_URL`。
 
+## Release 版本
+
+普通用户推荐优先下载 GitHub Release 里的 zip 包。Release 包是自包含的，不需要用户安装 .NET SDK。
+
+每个 Release 包包含：
+
+- `ai-proxy-hub` 或 `ai-proxy-hub.exe`
+- `.env.example`
+- `config/model-selection/*.json`
+- `README.md`
+- `README.zh-CN.md`
+- 对应平台的启动脚本
+
+根据系统下载对应文件：
+
+| 包名 | 适用系统 |
+|---|---|
+| `copilot-ai-proxy-vX.Y.Z-win-x64.zip` | Windows x64 |
+| `copilot-ai-proxy-vX.Y.Z-linux-x64.zip` | Linux x64 |
+| `copilot-ai-proxy-vX.Y.Z-osx-x64.zip` | Intel macOS |
+| `copilot-ai-proxy-vX.Y.Z-osx-arm64.zip` | Apple Silicon macOS |
+
+Windows：
+
+```powershell
+Expand-Archive .\copilot-ai-proxy-vX.Y.Z-win-x64.zip
+cd .\copilot-ai-proxy-vX.Y.Z-win-x64
+.\start-windows.cmd
+```
+
+Linux/macOS：
+
+```bash
+unzip copilot-ai-proxy-vX.Y.Z-linux-x64.zip
+cd copilot-ai-proxy-vX.Y.Z-linux-x64
+chmod +x ./start-unix.sh ./ai-proxy-hub
+./start-unix.sh
+```
+
+首次运行时，启动脚本会从 `.env.example` 复制出 `.env`，然后提示你编辑配置。填好至少一个 Provider API Key 后，再次启动代理即可。
+
+如果要修改模型上下文、显示名、是否支持工具调用或图片输入，直接编辑同目录下的 `config/model-selection/*.json`。修改 `.env` 或模型 JSON 后，需要重启代理。
+
 ## 快速开始
+
+下面是从源码运行的方式。
 
 复制环境变量模板：
 
@@ -381,6 +426,23 @@ dotnet test tests/ProxyTests/ProxyTests.csproj `
   -p:BaseOutputPath=$bin `
   -p:BaseIntermediateOutputPath=$obj
 ```
+
+## 创建 Release
+
+维护者可以在本地生成 Release 包：
+
+```powershell
+.\scripts\package-release.ps1 -Version vX.Y.Z
+```
+
+也可以推送版本 tag，让 GitHub Actions 自动发布：
+
+```bash
+git tag vX.Y.Z
+git push origin vX.Y.Z
+```
+
+`Release` workflow 会先运行测试，然后为 Windows、Linux、macOS 生成自包含 zip 包，并上传到 GitHub Release。
 
 ## 常见问题
 
