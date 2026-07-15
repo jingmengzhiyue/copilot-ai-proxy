@@ -30,6 +30,7 @@ http://localhost:11434
 | `openrouter` | OpenRouter | `https://openrouter.ai/api` | `PROVIDER_OPENROUTER_API_KEY` |
 | `groq` | Groq | `https://api.groq.com/openai` | `PROVIDER_GROQ_API_KEY` |
 | `moonshot` | Moonshot / Kimi | `https://api.moonshot.ai` | `PROVIDER_MOONSHOT_API_KEY` |
+| `kimi` | Kimi 国内开放平台 | `https://api.moonshot.cn` | `PROVIDER_KIMI_API_KEY` |
 | `cerebras` | Cerebras | `https://api.cerebras.ai` | `PROVIDER_CEREBRAS_API_KEY` |
 | `zenmux` | ZenMux | `https://zenmux.ai/api` | `PROVIDER_ZENMUX_API_KEY` |
 | `ollama` | Ollama Cloud 或本地 Ollama | `https://ollama.com` | `PROVIDER_OLLAMACLOUD_API_KEY` |
@@ -207,6 +208,7 @@ config/model-selection/
 | `customopenai.json` | 自定义 OpenAI 兼容服务 |
 | `openai.json` | OpenAI 模型 |
 | `moonshot.json` | Moonshot / Kimi 模型 |
+| `kimi.json` | Kimi 国内开放平台模型 |
 | `ollamacloud.json` | Ollama Cloud 模型 |
 
 ## 模型配置格式
@@ -337,6 +339,29 @@ config/model-selection/zhipu.json
 
 如果新智谱模型支持图片输入，把 `supports_vision` 改成 `true`。
 
+## 配置 Kimi 国内接口
+
+Kimi 国内站和 Moonshot 国际站的 API Key 不通用。国内站单独配置：
+
+```bash
+PROVIDER_KIMI_API_KEY=sk-your-kimi-cn-key
+# 可选，默认就是这个：
+PROVIDER_KIMI_BASE_URL=https://api.moonshot.cn
+```
+
+模型白名单位于 `config/model-selection/kimi.json`。如果国内站和国际站
+同时启用，建议使用 `@kimi` 明确指定国内接口：
+
+```bash
+curl http://localhost:11434/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "kimi-k2.7-code@kimi",
+    "messages": [{ "role": "user", "content": "写一个 C# 二分查找函数。" }],
+    "stream": true
+  }'
+```
+
 ## 自定义任意 OpenAI 兼容服务
 
 如果服务支持：
@@ -345,20 +370,71 @@ config/model-selection/zhipu.json
 - `POST /v1/chat/completions`
 - `Authorization: Bearer <api-key>`
 
-可以用 `customopenai`：
+可以用 `customopenai`。完整步骤如下。
+
+1. 先查询上游模型列表，记录准确的模型 id：
+
+```bash
+curl https://api.example-provider.com/v1/models \
+  -H "Authorization: Bearer your-provider-key"
+```
+
+2. 配置 API 根地址。不要带 `/v1`，代理会自动追加接口路径：
 
 ```bash
 PROVIDER_CUSTOMOPENAI_API_KEY=your-provider-key
-PROVIDER_CUSTOMOPENAI_BASE_URL=https://your-provider.example.com
+PROVIDER_CUSTOMOPENAI_BASE_URL=https://api.example-provider.com
 ```
 
-然后编辑：
+3. 编辑 `config/model-selection/customopenai.json`：
 
-```text
-config/model-selection/customopenai.json
+```json
+{
+  "provider": "customopenai",
+  "models": [
+    {
+      "match": "example-coder-32b",
+      "display_name": "Example Coder",
+      "priority": 1,
+      "enabled": true,
+      "execution": {
+        "context_length": 131072,
+        "max_output_tokens": 16384,
+        "supports_tools": true,
+        "supports_vision": false,
+        "family": "example",
+        "temperature": 0.2,
+        "max_tokens": 8192,
+        "timeout_seconds": 180
+      }
+    }
+  ]
+}
 ```
 
-把示例模型 `custom-coding-model` 换成真实上游模型 id。
+把 `match` 换成上游 `/v1/models` 返回的真实 id。只有上游确实支持工具或图片时，才开启对应能力。
+
+4. 重启代理并验证：
+
+```bash
+curl http://localhost:11434/v1/models
+curl http://localhost:11434/api/tags
+curl http://localhost:11434/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{"model":"Example Coder@customopenai","messages":[{"role":"user","content":"你好"}]}'
+```
+
+Visual Studio/Copilot 使用本地地址 `http://localhost:11434`，模型名使用
+`/v1/models` 或 `/api/tags` 返回的值。若设置了 `PROXY_API_KEY`，客户端填写该
+本地代理 Key；否则填写任意非空值。
+
+常见问题：
+
+- `401`：检查上游 API Key。
+- 请求路径出现 `/v1/v1/`：从 `PROVIDER_CUSTOMOPENAI_BASE_URL` 中删除 `/v1`。
+- 模型不显示：检查 `match`、`enabled`，并确认修改后已重启。
+- 路由错误：查看响应头 `X-Proxy-Provider`、`X-Proxy-Upstream-Model` 和
+  `X-Proxy-Resolved-Model`。
 
 ## display_name 有什么用
 

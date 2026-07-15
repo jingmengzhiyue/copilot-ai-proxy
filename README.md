@@ -42,6 +42,7 @@ Only providers with configured credentials are active at runtime.
 | `openrouter` | OpenRouter | OpenAI-compatible | `https://openrouter.ai/api` | `PROVIDER_OPENROUTER_API_KEY` |
 | `groq` | Groq | OpenAI-compatible | `https://api.groq.com/openai` | `PROVIDER_GROQ_API_KEY` |
 | `moonshot` | Moonshot / Kimi | OpenAI-compatible | `https://api.moonshot.ai` | `PROVIDER_MOONSHOT_API_KEY` |
+| `kimi` | Kimi China | OpenAI-compatible | `https://api.moonshot.cn` | `PROVIDER_KIMI_API_KEY` |
 | `cerebras` | Cerebras | OpenAI-compatible | `https://api.cerebras.ai` | `PROVIDER_CEREBRAS_API_KEY` |
 | `zenmux` | ZenMux | OpenAI-compatible aggregator | `https://zenmux.ai/api` | `PROVIDER_ZENMUX_API_KEY` |
 | `ollama` | Ollama Cloud or local Ollama | Ollama API | `https://ollama.com` | `PROVIDER_OLLAMACLOUD_API_KEY` |
@@ -246,6 +247,31 @@ The default Qwen examples are in `config/model-selection/qwen.json`:
 - `qwen-plus`, displayed as `Qwen Plus`
 - `qwen-turbo`, displayed as `Qwen Turbo`
 
+## Kimi China example
+
+Kimi China and Moonshot international use different API keys. Configure the
+China endpoint with its own variables:
+
+```bash
+PROVIDER_KIMI_API_KEY=sk-your-kimi-cn-key
+# Optional; this is the default:
+PROVIDER_KIMI_BASE_URL=https://api.moonshot.cn
+```
+
+Available coding models are curated in `config/model-selection/kimi.json`.
+When both `kimi` and `moonshot` are enabled, add `@kimi` to pin the request to
+the China endpoint:
+
+```bash
+curl http://localhost:11434/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "kimi-k2.7-code@kimi",
+    "messages": [{ "role": "user", "content": "Write a C# binary search function." }],
+    "stream": true
+  }'
+```
+
 ## Generic OpenAI-compatible providers
 
 Use `customopenai` when a provider supports:
@@ -254,16 +280,72 @@ Use `customopenai` when a provider supports:
 - `POST /v1/chat/completions`
 - `Authorization: Bearer <api-key>`
 
-Configure:
+1. Query the upstream catalog and copy the exact model id:
+
+```bash
+curl https://api.example-provider.com/v1/models \
+  -H "Authorization: Bearer your-provider-key"
+```
+
+2. Configure the API root. Do not include `/v1`; the proxy adds the endpoint
+paths itself.
 
 ```bash
 PROVIDER_CUSTOMOPENAI_API_KEY=your-provider-key
-PROVIDER_CUSTOMOPENAI_BASE_URL=https://your-provider.example.com
+PROVIDER_CUSTOMOPENAI_BASE_URL=https://api.example-provider.com
 ```
 
-Then edit `config/model-selection/customopenai.json` and replace
-`custom-coding-model` with a model id, or a stable substring of a model id,
-returned by that provider's `/v1/models` endpoint.
+3. Edit `config/model-selection/customopenai.json`:
+
+```json
+{
+  "provider": "customopenai",
+  "models": [
+    {
+      "match": "example-coder-32b",
+      "display_name": "Example Coder",
+      "priority": 1,
+      "enabled": true,
+      "execution": {
+        "context_length": 131072,
+        "max_output_tokens": 16384,
+        "supports_tools": true,
+        "supports_vision": false,
+        "family": "example",
+        "temperature": 0.2,
+        "max_tokens": 8192,
+        "timeout_seconds": 180
+      }
+    }
+  ]
+}
+```
+
+Set `match` to the exact id returned by the upstream catalog. Set capability
+fields only when the upstream model supports them.
+
+4. Restart the proxy and verify discovery and routing:
+
+```bash
+curl http://localhost:11434/v1/models
+curl http://localhost:11434/api/tags
+curl http://localhost:11434/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{"model":"Example Coder@customopenai","messages":[{"role":"user","content":"Hello"}]}'
+```
+
+For Visual Studio/Copilot, use local base URL `http://localhost:11434`, any
+non-empty local API key unless `PROXY_API_KEY` is set, and the model name shown
+by `/v1/models` or `/api/tags`.
+
+Common failures:
+
+- `401`: check the upstream API key.
+- `404` with `/v1/v1/...`: remove `/v1` from `PROVIDER_CUSTOMOPENAI_BASE_URL`.
+- Model missing: make sure the upstream id matches `models[].match`, the entry
+  is enabled, and the proxy was restarted.
+- Wrong route: inspect `X-Proxy-Provider`, `X-Proxy-Upstream-Model`, and
+  `X-Proxy-Resolved-Model` response headers.
 
 Restart the proxy after changing JSON files. Model selection files are loaded at
 startup and are not hot-reloaded.
