@@ -146,7 +146,36 @@ public class ProviderRegistryTests
         }
     }
 
+    [Fact]
+    public void DiscoverProviders_KimiApiKey_RegistersChinaEndpointWithoutMoonshot()
+    {
+        string? oldKimiKey = Environment.GetEnvironmentVariable("PROVIDER_KIMI_API_KEY");
+        string? oldKimiBase = Environment.GetEnvironmentVariable("PROVIDER_KIMI_BASE_URL");
+        string? oldMoonshotKey = Environment.GetEnvironmentVariable("PROVIDER_MOONSHOT_API_KEY");
+
+        try
+        {
+            Environment.SetEnvironmentVariable("PROVIDER_KIMI_API_KEY", "test-key");
+            Environment.SetEnvironmentVariable("PROVIDER_KIMI_BASE_URL", null);
+            Environment.SetEnvironmentVariable("PROVIDER_MOONSHOT_API_KEY", null);
+
+            ProviderHttpClientFactory factory = new();
+            ProviderRegistry registry = new(factory);
+
+            ProviderInfo kimi = Assert.Single(registry.Providers, p => p.Name.Equals("kimi", StringComparison.OrdinalIgnoreCase));
+            Assert.Equal("https://api.moonshot.cn", kimi.BaseUrl);
+            Assert.DoesNotContain(registry.Providers, p => p.Name.Equals("moonshot", StringComparison.OrdinalIgnoreCase));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("PROVIDER_KIMI_API_KEY", oldKimiKey);
+            Environment.SetEnvironmentVariable("PROVIDER_KIMI_BASE_URL", oldKimiBase);
+            Environment.SetEnvironmentVariable("PROVIDER_MOONSHOT_API_KEY", oldMoonshotKey);
+        }
+    }
+
     [Theory]
+    [InlineData("kimi", "KIMI", "https://api.moonshot.cn", "v1/chat/completions", "v1/models")]
     [InlineData("zhipu", "ZHIPU", "https://open.bigmodel.cn/api/paas", "v4/chat/completions", "v4/models")]
     [InlineData("qwen", "QWEN", "https://dashscope.aliyuncs.com/compatible-mode", "v1/chat/completions", "v1/models")]
     [InlineData("customopenai", "CUSTOMOPENAI", "", "v1/chat/completions", "v1/models")]
