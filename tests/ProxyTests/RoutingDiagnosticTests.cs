@@ -34,6 +34,7 @@ public class RoutingDiagnosticTests : IDisposable
             "PROVIDER_OLLAMACLOUD_API_KEY", "PROVIDER_OLLAMA_API_KEY", "PROVIDER_OLLAMA_BASE_URL",
             "PROVIDER_GOOGLE_API_KEY", "PROVIDER_GOOGLE_BASE_URL",
             "PROVIDER_MOONSHOT_API_KEY", "PROVIDER_MOONSHOT_BASE_URL",
+            "PROVIDER_KIMI_API_KEY", "PROVIDER_KIMI_BASE_URL",
             "PROVIDER_CEREBRAS_API_KEY", "PROVIDER_CEREBRAS_BASE_URL",
             "PROVIDER_ZENMUX_API_KEY", "PROVIDER_ZENMUX_BASE_URL",
             "DEEPSEEK_API_KEY", "DEEPSEEK_BASE_URL",
@@ -54,6 +55,39 @@ public class RoutingDiagnosticTests : IDisposable
     }
 
     private const string AnyKey = "test-key";
+
+    [Fact]
+    public void EnvironmentSnapshot_RestoresHostKimiConfiguration()
+    {
+        const string hostKey = "host-kimi-key";
+        const string hostBaseUrl = "http://host-kimi.test/";
+        string? oldKimiKey = Environment.GetEnvironmentVariable("PROVIDER_KIMI_API_KEY");
+        string? oldKimiBaseUrl = Environment.GetEnvironmentVariable("PROVIDER_KIMI_BASE_URL");
+
+        try
+        {
+            Environment.SetEnvironmentVariable("PROVIDER_KIMI_API_KEY", hostKey);
+            Environment.SetEnvironmentVariable("PROVIDER_KIMI_BASE_URL", hostBaseUrl);
+
+            RoutingDiagnosticTests testScope = new();
+            try
+            {
+                _ = BuildCatalog(new Dictionary<string, string[]> { ["kimi"] = [] });
+            }
+            finally
+            {
+                testScope.Dispose();
+            }
+
+            Assert.Equal(hostKey, Environment.GetEnvironmentVariable("PROVIDER_KIMI_API_KEY"));
+            Assert.Equal(hostBaseUrl, Environment.GetEnvironmentVariable("PROVIDER_KIMI_BASE_URL"));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("PROVIDER_KIMI_API_KEY", oldKimiKey);
+            Environment.SetEnvironmentVariable("PROVIDER_KIMI_BASE_URL", oldKimiBaseUrl);
+        }
+    }
 
     /// <summary>
     /// Builds a ProviderRegistry + ModelCatalogService with fake in-memory providers.

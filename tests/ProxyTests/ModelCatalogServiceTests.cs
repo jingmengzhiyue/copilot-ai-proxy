@@ -33,6 +33,7 @@ public class ModelCatalogServiceTests : IDisposable
             "PROVIDER_QWEN_API_KEY", "PROVIDER_QWEN_BASE_URL",
             "PROVIDER_CUSTOMOPENAI_API_KEY", "PROVIDER_CUSTOMOPENAI_BASE_URL",
             "PROVIDER_MOONSHOT_API_KEY", "PROVIDER_MOONSHOT_BASE_URL",
+            "PROVIDER_KIMI_API_KEY", "PROVIDER_KIMI_BASE_URL",
             "DEEPSEEK_API_KEY", "DEEPSEEK_BASE_URL",
             "DEEPSEEK_MODEL"
         ];
@@ -53,6 +54,39 @@ public class ModelCatalogServiceTests : IDisposable
     }
 
     private const string AnyKey = "test-key";
+
+    [Fact]
+    public void EnvironmentSnapshot_RestoresHostKimiConfiguration()
+    {
+        const string hostKey = "host-kimi-key";
+        const string hostBaseUrl = "http://host-kimi.test/";
+        string? oldKimiKey = Environment.GetEnvironmentVariable("PROVIDER_KIMI_API_KEY");
+        string? oldKimiBaseUrl = Environment.GetEnvironmentVariable("PROVIDER_KIMI_BASE_URL");
+
+        try
+        {
+            Environment.SetEnvironmentVariable("PROVIDER_KIMI_API_KEY", hostKey);
+            Environment.SetEnvironmentVariable("PROVIDER_KIMI_BASE_URL", hostBaseUrl);
+
+            ModelCatalogServiceTests testScope = new();
+            try
+            {
+                _ = BuildCatalog(new Dictionary<string, string[]> { ["kimi"] = [] });
+            }
+            finally
+            {
+                testScope.Dispose();
+            }
+
+            Assert.Equal(hostKey, Environment.GetEnvironmentVariable("PROVIDER_KIMI_API_KEY"));
+            Assert.Equal(hostBaseUrl, Environment.GetEnvironmentVariable("PROVIDER_KIMI_BASE_URL"));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("PROVIDER_KIMI_API_KEY", oldKimiKey);
+            Environment.SetEnvironmentVariable("PROVIDER_KIMI_BASE_URL", oldKimiBaseUrl);
+        }
+    }
 
     // ── Helpers ──────────────────────────────────────────────────────────
 

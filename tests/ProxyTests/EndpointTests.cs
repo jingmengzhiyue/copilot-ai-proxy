@@ -79,6 +79,8 @@ public sealed class ProxyFixture : IDisposable
         Environment.SetEnvironmentVariable("PROVIDER_OPENROUTER_API_KEY", null);
         Environment.SetEnvironmentVariable("PROVIDER_GROQ_API_KEY", null);
         Environment.SetEnvironmentVariable("PROVIDER_OLLAMACLOUD_API_KEY", null);
+        Environment.SetEnvironmentVariable("PROVIDER_KIMI_API_KEY", null);
+        Environment.SetEnvironmentVariable("PROVIDER_KIMI_BASE_URL", null);
         Environment.SetEnvironmentVariable("DEEPSEEK_API_KEY", null);
 
         // 3. Start the proxy via WebApplicationFactory
@@ -114,6 +116,46 @@ public class EndpointTests(ProxyFixture fixture)
     {
         HttpResponseMessage r = await _client.GetAsync("/health");
         Assert.Equal(HttpStatusCode.OK, r.StatusCode);
+    }
+
+    [Fact]
+    public async Task ProxyFixture_HostKimiConfiguration_IsNotRegistered()
+    {
+        string[] touchedKeys =
+        [
+            "PROVIDER_DEEPSEEK_API_KEY", "PROVIDER_DEEPSEEK_BASE_URL",
+            "PROVIDER_NVIDIA_API_KEY", "PROVIDER_OPENAI_API_KEY",
+            "PROVIDER_OPENROUTER_API_KEY", "PROVIDER_GROQ_API_KEY",
+            "PROVIDER_OLLAMACLOUD_API_KEY", "DEEPSEEK_API_KEY",
+            "PROVIDER_KIMI_API_KEY", "PROVIDER_KIMI_BASE_URL"
+        ];
+        Dictionary<string, string?> envSnapshot = touchedKeys.ToDictionary(
+            key => key,
+            Environment.GetEnvironmentVariable,
+            StringComparer.OrdinalIgnoreCase);
+
+        try
+        {
+            Environment.SetEnvironmentVariable("PROVIDER_KIMI_API_KEY", "host-kimi-key");
+            Environment.SetEnvironmentVariable("PROVIDER_KIMI_BASE_URL", "http://127.0.0.1:1");
+
+            using ProxyFixture isolatedFixture = new();
+            using HttpResponseMessage response = await isolatedFixture.Client.GetAsync("/health");
+            using JsonDocument body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            string[] providers = body.RootElement.GetProperty("providers")
+                .EnumerateArray()
+                .Select(provider => provider.GetString()!)
+                .ToArray();
+
+            Assert.DoesNotContain("kimi", providers, StringComparer.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            foreach (KeyValuePair<string, string?> entry in envSnapshot)
+            {
+                Environment.SetEnvironmentVariable(entry.Key, entry.Value);
+            }
+        }
     }
 
     [Fact]
