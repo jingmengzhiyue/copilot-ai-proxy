@@ -337,6 +337,29 @@ public class RoutingDiagnosticTests : IDisposable
         Assert.Equal("deepseek", cands[0].Provider.Name);
     }
 
+    [Fact]
+    public async Task KimiAndMoonshot_QualifiedKimiAlias_RoutesOnlyToChinaProvider()
+    {
+        (ModelCatalogService catalog, ProviderRegistry registry, _) =
+            BuildCatalog(new Dictionary<string, string[]>
+            {
+                ["moonshot"] = ["kimi-k2.7-code"],
+                ["kimi"] = ["kimi-k2.7-code"],
+            });
+
+        await catalog.RefreshAvailableModels(CancellationToken.None);
+
+        IReadOnlyList<(ProviderInfo Provider, string UpstreamModel)> bare =
+            registry.ResolveCandidates("kimi-k2.7-code");
+        IReadOnlyList<(ProviderInfo Provider, string UpstreamModel)> qualified =
+            registry.ResolveCandidates("kimi-k2.7-code@kimi");
+
+        Assert.Equal("moonshot", bare[0].Provider.Name);
+        Assert.Single(qualified);
+        Assert.Equal("kimi", qualified[0].Provider.Name);
+        Assert.Equal("kimi-k2.7-code", qualified[0].UpstreamModel);
+    }
+
     // ──────────────────────────────────────────────────────────────────────
     //  DIAGNÓSTICO: Cuando SOLO Ollama Cloud está configurado (sin deepseek),
     //  los modelos de ollamacloud se enrutan a ollama correctamente.

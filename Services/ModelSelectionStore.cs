@@ -82,6 +82,7 @@ internal sealed class ModelSelectionStore
         }
 
         ModelSelectionEntry[] entries = GetProviderModelSelections(providerName);
+        ModelSelectionEntry? fallback = null;
         foreach (ModelSelectionEntry entry in entries.OrderBy(x => x.Priority))
         {
             if (!entry.Enabled)
@@ -89,13 +90,19 @@ internal sealed class ModelSelectionStore
                 continue;
             }
 
-            if (m.Contains(entry.Match, StringComparison.OrdinalIgnoreCase))
+            // Prefer an exact ID so a base model cannot shadow a longer variant such as "-highspeed".
+            if (m.Equals(entry.Match, StringComparison.OrdinalIgnoreCase))
             {
                 return entry;
             }
+
+            if (!fallback.HasValue && m.Contains(entry.Match, StringComparison.OrdinalIgnoreCase))
+            {
+                fallback = entry;
+            }
         }
 
-        return null;
+        return fallback;
     }
 
     private static Dictionary<string, ModelSelectionEntry[]> LoadProviderModelSelections()

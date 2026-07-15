@@ -121,6 +121,7 @@ public class ModelSelectionStoreTests
         Assert.True(store.ProviderModelSelections.ContainsKey("nvidia"));
         Assert.True(store.ProviderModelSelections.ContainsKey("groq"));
         Assert.True(store.ProviderModelSelections.ContainsKey("moonshot"));
+        Assert.True(store.ProviderModelSelections.ContainsKey("kimi"));
         Assert.True(store.ProviderModelSelections.ContainsKey("openrouter"));
         Assert.True(store.ProviderModelSelections.ContainsKey("ollama"));
         Assert.True(store.ProviderModelSelections.ContainsKey("zhipu"));
@@ -236,6 +237,33 @@ public class ModelSelectionStoreTests
 
         Assert.NotNull(entry);
         Assert.Equal("kimi-k2.5", entry.Value.Match);
+    }
+
+    [Fact]
+    public void FindModelSelectionEntry_Kimi_K27Code_HasOfficialCapabilities()
+    {
+        ModelSelectionStore store = new();
+
+        ModelSelectionEntry? entry = store.FindModelSelectionEntry("kimi-k2.7-code", "kimi");
+
+        Assert.NotNull(entry);
+        Assert.Equal(262_144, entry.Value.Execution.ContextLength!.Value);
+        Assert.True(entry.Value.Execution.SupportsTools ?? false);
+        Assert.True(entry.Value.Execution.SupportsVision ?? false);
+        Assert.True(entry.Value.Execution.SupportsReasoning ?? false);
+        Assert.True(entry.Value.Execution.OverrideClientParams);
+        Assert.Equal(1.0, entry.Value.Execution.Temperature);
+    }
+
+    [Fact]
+    public void FindModelSelectionEntry_Kimi_K27HighSpeed_FindsEntry()
+    {
+        ModelSelectionStore store = new();
+
+        ModelSelectionEntry? entry = store.FindModelSelectionEntry("kimi-k2.7-code-highspeed", "kimi");
+
+        Assert.NotNull(entry);
+        Assert.Equal(2, entry.Value.Priority);
     }
 
     [Fact]
