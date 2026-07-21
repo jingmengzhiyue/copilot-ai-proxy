@@ -7,8 +7,8 @@
 ## 已确认事实
 
 - 项目会在 Provider Base URL 后追加 `v1/models` 和 `v1/chat/completions`，因此 Vercel Base URL 必须配置为 `https://ai-gateway.vercel.sh`，不能包含 `/v1`。
-- `kwaipilot/kat-coder-air-v2.5` 当前位于 Vercel 免费层模型列表，并已使用本地 `.env` 中的现有 Vercel Key 完成最小 Chat Completions 调用验证。
-- 模型公开元数据为 256,000 token 上下文、80,000 token 最大输出，支持推理和工具调用，不支持图片输入。
+- `meta/muse-spark-1.1` 当前位于 Vercel 免费层模型列表，并已使用本地 `.env` 中的现有 Vercel Key 完成最小 Chat Completions 调用验证。
+- 模型公开元数据为 1,048,576 token 上下文、1,048,576 token 最大输出，支持推理、工具调用、图片和 PDF 输入。
 - 当前代码已支持在一个 `customopenai` Provider 下配置多个模型；无需为多个共享同一 Base URL 和 API Key 的模型新增 Provider 实现。
 
 ## 配置设计
@@ -26,26 +26,26 @@ PROVIDER_CUSTOMOPENAI_BASE_URL=https://ai-gateway.vercel.sh
 
 ### 默认 Vercel 模型
 
-`config/model-selection/customopenai.json` 的默认示例改为 `kwaipilot/kat-coder-air-v2.5`：
+`config/model-selection/customopenai.json` 的默认示例改为 `meta/muse-spark-1.1`：
 
 ```json
 {
   "provider": "customopenai",
   "models": [
     {
-      "match": "kwaipilot/kat-coder-air-v2.5",
-      "display_name": "Kat Coder Air V2.5",
+      "match": "meta/muse-spark-1.1",
+      "display_name": "Muse Spark 1.1",
       "priority": 1,
       "enabled": true,
       "execution": {
-        "context_length": 256000,
-        "max_output_tokens": 80000,
+        "context_length": 1048576,
+        "max_output_tokens": 1048576,
         "supports_tools": true,
-        "supports_vision": false,
+        "supports_vision": true,
         "supports_reasoning": true,
-        "family": "kat-coder",
+        "family": "muse-spark",
         "temperature": 0.2,
-        "max_tokens": 80000,
+        "max_tokens": 65536,
         "timeout_seconds": 300
       }
     }
