@@ -278,9 +278,12 @@ internal sealed class ModelCatalogService
         return (ctx, maxOut, tools, vision, capabilities, family);
     }
 
-    internal CancellationTokenSource? CreateModelTimeoutCts(string model, CancellationToken outer)
+    internal CancellationTokenSource? CreateModelTimeoutCts(
+        string model,
+        string providerName,
+        CancellationToken outer)
     {
-        ModelExecutionConfig exec = _modelSelectionStore.GetExecutionConfigForModel(ResolveConfigModel(model), _providerRegistry.ModelToProvider);
+        ModelExecutionConfig exec = GetExecutionConfigForModel(model, providerName);
         if (!exec.TimeoutSeconds.HasValue || exec.TimeoutSeconds.Value <= 0)
         {
             return null;
@@ -293,6 +296,10 @@ internal sealed class ModelCatalogService
 
     internal ModelExecutionConfig GetExecutionConfigForModel(string model) =>
         _modelSelectionStore.GetExecutionConfigForModel(ResolveConfigModel(model), _providerRegistry.ModelToProvider);
+
+    internal ModelExecutionConfig GetExecutionConfigForModel(string model, string providerName) =>
+        _modelSelectionStore.FindModelSelectionEntry(ResolveConfigModel(model), providerName)?.Execution
+        ?? new ModelExecutionConfig();
 
     private string ResolveConfigModel(string model) =>
         _providerRegistry.ModelToUpstream.TryGetValue(model, out string? upstream) ? upstream : model;

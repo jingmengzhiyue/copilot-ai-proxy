@@ -831,4 +831,8 @@ matching model JSON file, restart the proxy, and check `/api/show` or
 
 ## License
 
-WTFPL.
+Licensed under the Apache License 2.0. See [LICENSE](LICENSE).
+
+## Acknowledgements
+
+This project was forked from [iqmeta/copilot-ollama-multi-provider-ai-proxy](https://github.com/iqmeta/copilot-ollama-multi-provider-ai-proxy) and has undergone extensive modifications.

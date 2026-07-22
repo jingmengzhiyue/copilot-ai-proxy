@@ -531,6 +531,37 @@ public class ModelCatalogServiceTests : IDisposable
     }
 
     [Fact]
+    public void KimiK26_ProviderSpecificConfig_KeepsTimeoutsAndForcedDefaultsIsolated()
+    {
+        (ModelCatalogService catalog, _, _) =
+            BuildCatalog(
+                new Dictionary<string, string[]>
+                {
+                    ["moonshot"] = ["kimi-k2.6"],
+                    ["ollama"] = ["kimi-k2.6"],
+                },
+                ollamaProviders: ["ollama"]);
+
+        ModelExecutionConfig moonshot = catalog.GetExecutionConfigForModel("kimi-k2.6", "moonshot");
+        ModelExecutionConfig ollama = catalog.GetExecutionConfigForModel("kimi-k2.6", "ollama");
+
+        Assert.Equal(60, moonshot.TimeoutSeconds);
+        Assert.Null(moonshot.Temperature);
+        Assert.Null(moonshot.MaxTokensPreferred);
+        Assert.Equal(180, ollama.TimeoutSeconds);
+        Assert.Equal(1.0, ollama.Temperature);
+        Assert.Equal(16384, ollama.MaxTokensPreferred);
+
+        using CancellationTokenSource? moonshotTimeout =
+            catalog.CreateModelTimeoutCts("kimi-k2.6", "moonshot", CancellationToken.None);
+        using CancellationTokenSource? ollamaTimeout =
+            catalog.CreateModelTimeoutCts("kimi-k2.6", "ollama", CancellationToken.None);
+
+        Assert.NotNull(moonshotTimeout);
+        Assert.NotNull(ollamaTimeout);
+    }
+
+    [Fact]
     public async Task QualifiedAlias_AlwaysResolvesToItsOwnProvider()
     {
         // nvidia and groq both offer "openai/gpt-oss-120b"; ollama offers "gpt-oss-120b".

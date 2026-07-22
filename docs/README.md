@@ -319,7 +319,7 @@ Upstream Providers
 
 ## License
 
-WTFPL (Do What The Fuck You Want To Public License)
+Licensed under the Apache License 2.0. See [LICENSE](../LICENSE).
 
 ## Support
 

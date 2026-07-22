@@ -138,9 +138,6 @@ internal static class OpenAiEndpoints
 
             string? modifiedRequest = requestTransformer.ModifyRequest(doc);
 
-            using CancellationTokenSource? timeoutCts = modelCatalog.CreateModelTimeoutCts(effectiveModel, ct);
-            CancellationToken requestCt = timeoutCts?.Token ?? ct;
-
             if (!isStream)
             {
                 HttpResponseMessage? lastResponse = null;
@@ -150,18 +147,27 @@ internal static class OpenAiEndpoints
                     for (int i = 0; i < candidates.Count; i++)
                     {
                         (ProviderInfo candidateProvider, string candidateUpstream) = candidates[i];
+                        using CancellationTokenSource? candidateTimeoutCts = modelCatalog.CreateModelTimeoutCts(
+                            effectiveModel,
+                            candidateProvider.Name,
+                            ct);
+                        CancellationToken candidateRequestCt = candidateTimeoutCts?.Token ?? ct;
 
                         string candidateBody = modifiedRequest ?? rawBody;
                         // Always replace the model in the body with the upstream model.
                         // The raw body may carry a BYOM tag suffix (e.g. ":latest") that
                         // upstream providers don't understand.
                         candidateBody = requestTransformer.ReplaceModelInRequestBody(candidateBody, candidateUpstream);
-                        candidateBody = requestTransformer.ApplyExecutionDefaults(candidateBody, effectiveModel, candidateProvider.Capabilities);
+                        candidateBody = requestTransformer.ApplyExecutionDefaults(
+                            candidateBody,
+                            effectiveModel,
+                            candidateProvider.Capabilities,
+                            candidateProvider.Name);
 
                         if (candidateProvider.Capabilities.ApiFormat == ApiFormat.Ollama)
                         {
                             bool handled = await TryHandleOllamaCloudChatCompletion(
-                                ctx, candidateProvider, candidateBody, effectiveModel, candidateUpstream, requestCt, ct);
+                                ctx, candidateProvider, candidateBody, effectiveModel, candidateUpstream, candidateRequestCt, ct);
                             if (handled)
                                 return;
                             continue;
@@ -170,7 +176,7 @@ internal static class OpenAiEndpoints
                         using StringContent content = new(candidateBody, Encoding.UTF8, "application/json");
                         HttpResponseMessage response = await candidateProvider.Client.SendAsync(
                             new HttpRequestMessage(HttpMethod.Post, candidateProvider.Capabilities.ChatPath) { Content = content },
-                            requestCt);
+                            candidateRequestCt);
 
                         string respBody = await response.Content.ReadAsStringAsync(ct);
 
@@ -204,13 +210,22 @@ internal static class OpenAiEndpoints
 
             // Streaming: use the first candidate only (cannot fail over once bytes are emitted).
             (ProviderInfo provider, string upstreamModel) = candidates[0];
+            using CancellationTokenSource? timeoutCts = modelCatalog.CreateModelTimeoutCts(
+                effectiveModel,
+                provider.Name,
+                ct);
+            CancellationToken requestCt = timeoutCts?.Token ?? ct;
 
             string bodyText = modifiedRequest ?? rawBody;
             // Always replace the model in the body with the upstream model.
             // The raw body may carry a BYOM tag suffix (e.g. ":latest") that
             // upstream providers don't understand.
             bodyText = requestTransformer.ReplaceModelInRequestBody(bodyText, upstreamModel);
-            bodyText = requestTransformer.ApplyExecutionDefaults(bodyText, effectiveModel, provider.Capabilities);
+            bodyText = requestTransformer.ApplyExecutionDefaults(
+                bodyText,
+                effectiveModel,
+                provider.Capabilities,
+                provider.Name);
 
             if (provider.Capabilities.ApiFormat == ApiFormat.Ollama)
             {

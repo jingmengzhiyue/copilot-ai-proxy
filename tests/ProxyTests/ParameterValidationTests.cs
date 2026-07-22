@@ -35,13 +35,13 @@ public class ParameterValidationTests
     private static JsonElement Transform(RequestTransformer sut, string model, string providerName = "")
     {
         string raw    = """{"model":"x","messages":[{"role":"user","content":"hi"}]}""";
-        string result = sut.ApplyExecutionDefaults(raw, model, ResolveCaps(providerName));
+        string result = sut.ApplyExecutionDefaults(raw, model, ResolveCaps(providerName), providerName);
         return JsonDocument.Parse(result).RootElement;
     }
 
     private static JsonElement TransformWithBody(RequestTransformer sut, string body, string model, string providerName = "")
     {
-        string result = sut.ApplyExecutionDefaults(body, model, ResolveCaps(providerName));
+        string result = sut.ApplyExecutionDefaults(body, model, ResolveCaps(providerName), providerName);
         return JsonDocument.Parse(result).RootElement;
     }
 

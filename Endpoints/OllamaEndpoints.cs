@@ -186,7 +186,9 @@ internal static class OllamaEndpoints
             string ollamaEffectiveModel = providerRegistry.ResolveModel(ollamaRequestedModel);
             string ollamaUpstreamModel = providerRegistry.ResolveUpstreamModel(ollamaEffectiveModel);
             ProviderInfo ollamaProvider = providerRegistry.ResolveProvider(ollamaEffectiveModel);
-            ModelExecutionConfig ollamaExec = modelCatalog.GetExecutionConfigForModel(ollamaEffectiveModel);
+            ModelExecutionConfig ollamaExec = modelCatalog.GetExecutionConfigForModel(
+                ollamaEffectiveModel,
+                ollamaProvider.Name);
 
             // ── Diagnostic headers ───────────────────────────────────────
             ctx.Response.Headers["X-Proxy-Requested-Model"] = ollamaRequestedModel;
@@ -194,7 +196,10 @@ internal static class OllamaEndpoints
             ctx.Response.Headers["X-Proxy-Upstream-Model"] = ollamaUpstreamModel;
             ctx.Response.Headers["X-Proxy-Provider"] = ollamaProvider.Name;
 
-            using CancellationTokenSource? ollamaTimeoutCts = modelCatalog.CreateModelTimeoutCts(ollamaEffectiveModel, ct);
+            using CancellationTokenSource? ollamaTimeoutCts = modelCatalog.CreateModelTimeoutCts(
+                ollamaEffectiveModel,
+                ollamaProvider.Name,
+                ct);
             CancellationToken ollamaCt = ollamaTimeoutCts?.Token ?? ct;
 
             // ── Ollama Cloud / Native Ollama passthrough ──────────────────
@@ -266,7 +271,11 @@ internal static class OllamaEndpoints
             }
 
             // Apply execution defaults with provider-aware parameter filtering
-            openAiBody = requestTransformer.ApplyExecutionDefaults(openAiBody, ollamaEffectiveModel, ollamaProvider.Capabilities);
+            openAiBody = requestTransformer.ApplyExecutionDefaults(
+                openAiBody,
+                ollamaEffectiveModel,
+                ollamaProvider.Capabilities,
+                ollamaProvider.Name);
 
             using StringContent reqContent = new(openAiBody, Encoding.UTF8, "application/json");
 

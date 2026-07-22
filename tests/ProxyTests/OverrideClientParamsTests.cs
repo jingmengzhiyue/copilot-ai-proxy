@@ -18,7 +18,7 @@ public class OverrideClientParamsTests
         RequestTransformer sut = CreateTransformer();
         string raw = """{"messages":[],"temperature":0.7}""";
 
-        string result = sut.ApplyExecutionDefaults(raw, "kimi-k2.6", ProviderCapabilitiesRegistry.Get("moonshot"));
+        string result = sut.ApplyExecutionDefaults(raw, "kimi-k2.6", ProviderCapabilitiesRegistry.Get("moonshot"), "moonshot");
 
         using JsonDocument doc = JsonDocument.Parse(result);
         Assert.Equal(0.7, doc.RootElement.GetProperty("temperature").GetDouble());
@@ -30,7 +30,7 @@ public class OverrideClientParamsTests
         RequestTransformer sut = CreateTransformer();
         string raw = """{"messages":[],"max_tokens":32000}""";
 
-        string result = sut.ApplyExecutionDefaults(raw, "kimi-k2.6", ProviderCapabilitiesRegistry.Get("moonshot"));
+        string result = sut.ApplyExecutionDefaults(raw, "kimi-k2.6", ProviderCapabilitiesRegistry.Get("moonshot"), "moonshot");
 
         using JsonDocument doc = JsonDocument.Parse(result);
         Assert.Equal(32000, doc.RootElement.GetProperty("max_tokens").GetInt32());
@@ -42,7 +42,7 @@ public class OverrideClientParamsTests
         RequestTransformer sut = CreateTransformer();
         string raw = """{"messages":[],"top_p":0.5}""";
 
-        string result = sut.ApplyExecutionDefaults(raw, "kimi-k2.6", ProviderCapabilitiesRegistry.Get("moonshot"));
+        string result = sut.ApplyExecutionDefaults(raw, "kimi-k2.6", ProviderCapabilitiesRegistry.Get("moonshot"), "moonshot");
 
         using JsonDocument doc = JsonDocument.Parse(result);
         // kimi-k2.6's configured top_p is 0.95
@@ -57,7 +57,7 @@ public class OverrideClientParamsTests
         RequestTransformer sut = CreateTransformer();
         string raw = """{"messages":[],"temperature":0.7,"max_tokens":1234}""";
 
-        string result = sut.ApplyExecutionDefaults(raw, "moonshot-v1-128k", ProviderCapabilitiesRegistry.Get("moonshot"));
+        string result = sut.ApplyExecutionDefaults(raw, "moonshot-v1-128k", ProviderCapabilitiesRegistry.Get("moonshot"), "moonshot");
 
         using JsonDocument doc = JsonDocument.Parse(result);
         Assert.Equal(0.7, doc.RootElement.GetProperty("temperature").GetDouble());
@@ -72,7 +72,7 @@ public class OverrideClientParamsTests
         RequestTransformer sut = CreateTransformer();
         string raw = """{"messages":[]}""";
 
-        string result = sut.ApplyExecutionDefaults(raw, "moonshot-v1-128k", ProviderCapabilitiesRegistry.Get("moonshot"));
+        string result = sut.ApplyExecutionDefaults(raw, "moonshot-v1-128k", ProviderCapabilitiesRegistry.Get("moonshot"), "moonshot");
 
         using JsonDocument doc = JsonDocument.Parse(result);
         Assert.Equal(0.3, doc.RootElement.GetProperty("temperature").GetDouble());
@@ -95,7 +95,7 @@ public class OverrideClientParamsTests
             }
             """;
 
-        string result = sut.ApplyExecutionDefaults(raw, "kimi-k2.6", ProviderCapabilitiesRegistry.Get("moonshot"));
+        string result = sut.ApplyExecutionDefaults(raw, "kimi-k2.6", ProviderCapabilitiesRegistry.Get("moonshot"), "moonshot");
 
         using JsonDocument doc = JsonDocument.Parse(result);
         Assert.Equal(0.2, doc.RootElement.GetProperty("temperature").GetDouble());

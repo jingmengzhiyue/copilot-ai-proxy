@@ -12,9 +12,15 @@ internal sealed class RequestTransformer
         _reasoningCacheService = reasoningCacheService;
     }
 
-    internal string ApplyExecutionDefaults(string rawBody, string model, ProviderCapabilities capabilities = default)
+    internal string ApplyExecutionDefaults(
+        string rawBody,
+        string model,
+        ProviderCapabilities capabilities = default,
+        string? providerName = null)
     {
-        ModelExecutionConfig exec = _modelCatalogService.GetExecutionConfigForModel(model);
+        ModelExecutionConfig exec = string.IsNullOrWhiteSpace(providerName)
+            ? _modelCatalogService.GetExecutionConfigForModel(model)
+            : _modelCatalogService.GetExecutionConfigForModel(model, providerName);
         bool hasAnyDefault = exec.Temperature.HasValue
             || exec.TopP.HasValue
             || exec.MaxTokensPreferred.HasValue
