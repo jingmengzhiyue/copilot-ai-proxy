@@ -43,8 +43,8 @@
         "supports_tools": true,
         "supports_vision": false,
         "family": "nvidia",
-        "temperature": 0.2,
-        "top_p": 0.9,
+        "temperature": 1.0,
+        "top_p": 0.95,
         "max_tokens": 8192,
         "timeout_seconds": 120
       }
@@ -86,7 +86,7 @@
       "priority": 6,
       "enabled": false,
       "execution": {
-        "context_length": 1048576,
+        "context_length": 1000000,
         "max_output_tokens": 384000,
         "supports_tools": true,
         "supports_vision": false,
@@ -101,8 +101,8 @@
       "priority": 7,
       "enabled": false,
       "execution": {
-        "context_length": 1048576,
-        "max_output_tokens": 131072,
+        "context_length": 1000000,
+        "max_output_tokens": 384000,
         "supports_tools": true,
         "supports_vision": false,
         "family": "deepseek",

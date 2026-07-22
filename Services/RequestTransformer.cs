@@ -18,6 +18,7 @@ internal sealed class RequestTransformer
         bool hasAnyDefault = exec.Temperature.HasValue
             || exec.TopP.HasValue
             || exec.MaxTokensPreferred.HasValue
+            || exec.MaxCompletionTokensPreferred.HasValue
             || !string.IsNullOrWhiteSpace(exec.ReasoningEffort);
         if (!hasAnyDefault)
         {
@@ -54,7 +55,7 @@ internal sealed class RequestTransformer
 
             bool hasTemperature = false;
             bool hasTopP = false;
-            bool hasMaxTokens = false;
+            bool hasOutputLimit = false;
             bool hasReasoningEffort = false;
 
             foreach (JsonProperty prop in root.EnumerateObject())
@@ -83,9 +84,20 @@ internal sealed class RequestTransformer
                     }
                     hasTopP = true;
                 }
-                else if (prop.NameEquals("max_tokens"))
+                else if (prop.NameEquals("max_tokens") || prop.NameEquals("max_completion_tokens"))
                 {
-                    if (force && exec.MaxTokensPreferred.HasValue)
+                    if (hasOutputLimit)
+                    {
+                        // OpenAI-compatible APIs treat these as alternative names for the
+                        // same limit. Preserve only the first client value if both are sent.
+                        continue;
+                    }
+
+                    if (force && exec.MaxCompletionTokensPreferred.HasValue)
+                    {
+                        writer.WriteNumber("max_completion_tokens", exec.MaxCompletionTokensPreferred.Value);
+                    }
+                    else if (force && exec.MaxTokensPreferred.HasValue)
                     {
                         writer.WriteNumber("max_tokens", exec.MaxTokensPreferred.Value);
                     }
@@ -93,7 +105,7 @@ internal sealed class RequestTransformer
                     {
                         prop.WriteTo(writer);
                     }
-                    hasMaxTokens = true;
+                    hasOutputLimit = true;
                 }
                 else if (prop.NameEquals("reasoning_effort"))
                 {
@@ -123,7 +135,9 @@ internal sealed class RequestTransformer
             // Skip top_p injection for native reasoners to avoid temperature+top_p conflict.
             if (!hasTopP && exec.TopP.HasValue && !isNativeReasoner)
                 writer.WriteNumber("top_p", exec.TopP.Value);
-            if (!hasMaxTokens && exec.MaxTokensPreferred.HasValue)
+            if (!hasOutputLimit && exec.MaxCompletionTokensPreferred.HasValue)
+                writer.WriteNumber("max_completion_tokens", exec.MaxCompletionTokensPreferred.Value);
+            else if (!hasOutputLimit && exec.MaxTokensPreferred.HasValue)
                 writer.WriteNumber("max_tokens", exec.MaxTokensPreferred.Value);
             // Only inject reasoning_effort for providers/models that natively support it.
             if (!hasReasoningEffort && !string.IsNullOrWhiteSpace(exec.ReasoningEffort) && supportsReasoningEffort)

@@ -2,19 +2,20 @@
   "provider": "customopenai",
   "models": [
     {
-      "match": "custom-coding-model",
-      "display_name": "Custom Coding Model",
+      "match": "meta/muse-spark-1.1",
+      "display_name": "Muse Spark 1.1",
       "priority": 1,
       "enabled": true,
       "execution": {
-        "context_length": 128000,
-        "max_output_tokens": 8192,
+        "context_length": 1048576,
+        "max_output_tokens": 1048576,
         "supports_tools": true,
-        "supports_vision": false,
-        "family": "custom-openai",
+        "supports_vision": true,
+        "supports_reasoning": true,
+        "family": "muse-spark",
         "temperature": 0.2,
-        "max_tokens": 8192,
-        "timeout_seconds": 180
+        "max_tokens": 65536,
+        "timeout_seconds": 300
       }
     }
   ]

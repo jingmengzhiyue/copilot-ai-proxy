@@ -13,7 +13,7 @@ public class ModelSelectionStoreTests
         ModelExecutionConfig config = store.GetExecutionConfigForModel("deepseek-v4-pro", registry.ModelToProvider);
 
         Assert.True(config.ContextLength.HasValue);
-        Assert.Equal(1_048_576, config.ContextLength.Value);
+        Assert.Equal(1_000_000, config.ContextLength.Value);
     }
 
     [Fact]
@@ -127,6 +127,8 @@ public class ModelSelectionStoreTests
         Assert.True(store.ProviderModelSelections.ContainsKey("zhipu"));
         Assert.True(store.ProviderModelSelections.ContainsKey("qwen"));
         Assert.True(store.ProviderModelSelections.ContainsKey("customopenai"));
+        Assert.True(store.ProviderModelSelections.ContainsKey("minimax"));
+        Assert.True(store.ProviderModelSelections.ContainsKey("hunyuan"));
     }
 
     [Fact]
@@ -253,6 +255,8 @@ public class ModelSelectionStoreTests
         Assert.True(entry.Value.Execution.SupportsReasoning ?? false);
         Assert.True(entry.Value.Execution.OverrideClientParams);
         Assert.Equal(1.0, entry.Value.Execution.Temperature);
+        Assert.Equal(0.95, entry.Value.Execution.TopP);
+        Assert.Null(entry.Value.Execution.MaxTokensPreferred);
     }
 
     [Fact]
@@ -263,11 +267,60 @@ public class ModelSelectionStoreTests
         ModelSelectionEntry? entry = store.FindModelSelectionEntry("kimi-k2.7-code-highspeed", "kimi");
 
         Assert.NotNull(entry);
-        Assert.Equal(2, entry.Value.Priority);
+        Assert.Equal(3, entry.Value.Priority);
     }
 
     [Fact]
-    public void GetExecutionConfigForModel_OllamaCloud_Qwen3Coder480B_HasContextLength128K()
+    public void FindModelSelectionEntry_MiniMax_M3_UsesOfficialCompletionLimit()
+    {
+        ModelSelectionStore store = new();
+
+        ModelSelectionEntry? entry = store.FindModelSelectionEntry("MiniMax-M3", "minimax");
+
+        Assert.NotNull(entry);
+        Assert.Equal(1_000_000, entry.Value.Execution.ContextLength);
+        Assert.Equal(524_288, entry.Value.Execution.MaxOutputTokens);
+        Assert.Equal(131_072, entry.Value.Execution.MaxCompletionTokensPreferred);
+        Assert.Null(entry.Value.Execution.MaxTokensPreferred);
+        Assert.True(entry.Value.Execution.SupportsTools);
+        Assert.True(entry.Value.Execution.SupportsVision);
+        Assert.True(entry.Value.Execution.SupportsReasoning);
+    }
+
+    [Fact]
+    public void FindModelSelectionEntry_MiniMax_M27Highspeed_IsCuratedFallback()
+    {
+        ModelSelectionStore store = new();
+
+        ModelSelectionEntry? entry = store.FindModelSelectionEntry("MiniMax-M2.7-highspeed", "minimax");
+
+        Assert.NotNull(entry);
+        Assert.Equal(204_800, entry.Value.Execution.ContextLength);
+        Assert.Equal(204_800, entry.Value.Execution.MaxOutputTokens);
+        Assert.Equal(65_536, entry.Value.Execution.MaxCompletionTokensPreferred);
+        Assert.False(entry.Value.Execution.SupportsVision);
+    }
+
+    [Fact]
+    public void FindModelSelectionEntry_Hunyuan_Hy3_UsesOfficialAgentProfile()
+    {
+        ModelSelectionStore store = new();
+
+        ModelSelectionEntry? entry = store.FindModelSelectionEntry("hy3", "hunyuan");
+
+        Assert.NotNull(entry);
+        Assert.Equal(262_144, entry.Value.Execution.ContextLength);
+        Assert.Equal(131_072, entry.Value.Execution.MaxOutputTokens);
+        Assert.Equal(131_072, entry.Value.Execution.MaxTokensPreferred);
+        Assert.Null(entry.Value.Execution.MaxCompletionTokensPreferred);
+        Assert.True(entry.Value.Execution.SupportsTools);
+        Assert.False(entry.Value.Execution.SupportsVision);
+        Assert.True(entry.Value.Execution.SupportsReasoning);
+        Assert.Equal("high", entry.Value.Execution.ReasoningEffort);
+    }
+
+    [Fact]
+    public void GetExecutionConfigForModel_OllamaCloud_Qwen3Coder480B_HasOfficialContextLength()
     {
         ModelSelectionStore store = new();
         ProviderHttpClientFactory factory = new();
@@ -276,23 +329,19 @@ public class ModelSelectionStoreTests
         ModelExecutionConfig config = store.GetExecutionConfigForModel("qwen3-coder:480b", registry.ModelToProvider);
 
         Assert.True(config.ContextLength.HasValue);
-        Assert.Equal(1_000_000, config.ContextLength.Value);
+        Assert.Equal(262_144, config.ContextLength.Value);
     }
 
     [Fact]
-    public void GetExecutionConfigForModel_OllamaCloud_KimiK26_HasOverrideClientParams()
+    public void FindModelSelectionEntry_OllamaCloud_KimiK26_HasOverrideClientParams()
     {
         ModelSelectionStore store = new();
-        ProviderHttpClientFactory factory = new();
-        ProviderRegistry registry = new(factory);
 
-        ModelExecutionConfig config = store.GetExecutionConfigForModel("kimi-k2.6", registry.ModelToProvider);
+        ModelSelectionEntry? entry = store.FindModelSelectionEntry("kimi-k2.6", "ollama");
 
-        // kimi-k2.6 served via Ollama Cloud inherits the moonshot override_client_params
-        // rule and must always pin temperature=1.0.
-        Assert.True(config.Temperature.HasValue);
-        Assert.Equal(1.0, config.Temperature.Value);
-        Assert.True(config.OverrideClientParams);
+        Assert.NotNull(entry);
+        Assert.Equal(1.0, entry.Value.Execution.Temperature);
+        Assert.True(entry.Value.Execution.OverrideClientParams);
     }
 
     [Fact]
@@ -350,7 +399,7 @@ public class ModelSelectionStoreTests
     }
 
     [Fact]
-    public void GetExecutionConfigForModel_HasTemperature()
+    public void GetExecutionConfigForModel_DeepSeekPro_HasRequestLimit()
     {
         ModelSelectionStore store = new();
         ProviderHttpClientFactory factory = new();
@@ -358,8 +407,8 @@ public class ModelSelectionStoreTests
 
         ModelExecutionConfig config = store.GetExecutionConfigForModel("deepseek-v4-pro", registry.ModelToProvider);
 
-        Assert.True(config.Temperature.HasValue);
-        Assert.True(config.Temperature.Value >= 0);
+        Assert.Equal(65_536, config.MaxTokensPreferred);
+        Assert.Null(config.Temperature);
     }
 
     [Fact]
@@ -387,14 +436,16 @@ public class ModelSelectionStoreTests
     }
 
     [Fact]
-    public void FindModelSelectionEntry_Moonshot_KimiK26_HasTemperature10()
+    public void FindModelSelectionEntry_Moonshot_KimiK26_UsesModeSafeSampling()
     {
         ModelSelectionStore store = new();
 
         ModelSelectionEntry? entry = store.FindModelSelectionEntry("kimi-k2.6", "moonshot");
 
         Assert.NotNull(entry);
-        Assert.Equal(1.0, entry.Value.Execution.Temperature);
+        Assert.Null(entry.Value.Execution.Temperature);
+        Assert.Equal(0.95, entry.Value.Execution.TopP);
+        Assert.True(entry.Value.Execution.OverrideClientParams);
     }
 
     [Fact]
@@ -450,18 +501,24 @@ public class ModelSelectionStoreTests
         ModelSelectionEntry? entry = store.FindModelSelectionEntry("qwen3-coder-plus", "qwen");
 
         Assert.NotNull(entry);
-        Assert.Equal("Qwen Coder", entry.Value.DisplayName);
+        Assert.Equal("Qwen3 Coder Plus", entry.Value.DisplayName);
     }
 
     [Fact]
-    public void FindModelSelectionEntry_CustomOpenAi_ExampleModel_FindsEntry()
+    public void FindModelSelectionEntry_CustomOpenAi_MuseSpark_HasVercelProfile()
     {
         ModelSelectionStore store = new();
 
-        ModelSelectionEntry? entry = store.FindModelSelectionEntry("custom-coding-model", "customopenai");
+        ModelSelectionEntry? entry = store.FindModelSelectionEntry("meta/muse-spark-1.1", "customopenai");
 
         Assert.NotNull(entry);
-        Assert.Equal("custom-coding-model", entry.Value.Match);
-        Assert.Equal("custom-openai", entry.Value.Execution.Family);
+        Assert.Equal("Muse Spark 1.1", entry.Value.DisplayName);
+        Assert.Equal(1_048_576, entry.Value.Execution.ContextLength);
+        Assert.Equal(1_048_576, entry.Value.Execution.MaxOutputTokens);
+        Assert.Equal(65_536, entry.Value.Execution.MaxTokensPreferred);
+        Assert.True(entry.Value.Execution.SupportsTools);
+        Assert.True(entry.Value.Execution.SupportsVision);
+        Assert.True(entry.Value.Execution.SupportsReasoning);
+        Assert.Equal("muse-spark", entry.Value.Execution.Family);
     }
 }

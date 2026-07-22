@@ -1,0 +1,22 @@
+{
+  "provider": "hunyuan",
+  "models": [
+    {
+      "match": "hy3",
+      "display_name": "Tencent Hunyuan Hy3",
+      "priority": 1,
+      "enabled": true,
+      "execution": {
+        "context_length": 262144,
+        "max_output_tokens": 131072,
+        "supports_tools": true,
+        "supports_vision": false,
+        "supports_reasoning": true,
+        "family": "hunyuan",
+        "max_tokens": 131072,
+        "reasoning_effort": "high",
+        "timeout_seconds": 300
+      }
+    }
+  ]
+}

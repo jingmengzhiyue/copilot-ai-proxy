@@ -25,6 +25,8 @@ http://localhost:11434
 | `openai` | OpenAI | `https://api.openai.com` | `PROVIDER_OPENAI_API_KEY` |
 | `zhipu` | 智谱 / BigModel | `https://open.bigmodel.cn/api/paas` | `PROVIDER_ZHIPU_API_KEY` |
 | `qwen` | 通义千问 / DashScope 兼容模式 | `https://dashscope.aliyuncs.com/compatible-mode` | `PROVIDER_QWEN_API_KEY` |
+| `minimax` | MiniMax | `https://api.minimax.io` | `PROVIDER_MINIMAX_API_KEY` |
+| `hunyuan` | 腾讯混元 / TokenHub | `https://tokenhub.tencentmaas.com` | `PROVIDER_HUNYUAN_API_KEY` |
 | `google` | Google Gemini OpenAI 兼容接口 | `https://generativelanguage.googleapis.com` | `PROVIDER_GOOGLE_API_KEY` |
 | `nvidia` | NVIDIA NIM | `https://integrate.api.nvidia.com` | `PROVIDER_NVIDIA_API_KEY` |
 | `openrouter` | OpenRouter | `https://openrouter.ai/api` | `PROVIDER_OPENROUTER_API_KEY` |
@@ -34,9 +36,10 @@ http://localhost:11434
 | `cerebras` | Cerebras | `https://api.cerebras.ai` | `PROVIDER_CEREBRAS_API_KEY` |
 | `zenmux` | ZenMux | `https://zenmux.ai/api` | `PROVIDER_ZENMUX_API_KEY` |
 | `ollama` | Ollama Cloud 或本地 Ollama | `https://ollama.com` | `PROVIDER_OLLAMACLOUD_API_KEY` |
-| `customopenai` | 任意 OpenAI 兼容服务 | 无默认值 | `PROVIDER_CUSTOMOPENAI_API_KEY` |
+| `customopenai` | 任意 OpenAI 兼容服务，包括 Vercel AI Gateway | 无默认值 | `PROVIDER_CUSTOMOPENAI_API_KEY` |
 
-`customopenai` 必须额外配置 `PROVIDER_CUSTOMOPENAI_BASE_URL`。
+`customopenai` 必须额外配置 `PROVIDER_CUSTOMOPENAI_BASE_URL`。Vercel 示例使用
+`https://ai-gateway.vercel.sh`。
 
 ## Release 版本
 
@@ -134,11 +137,12 @@ curl http://localhost:11434/api/tags
 | 字段 | 说明 |
 |---|---|
 | `execution.max_tokens` | 当客户端没有传 `max_tokens` 时，代理默认发给上游的请求输出上限。 |
+| `execution.max_completion_tokens` | 使用新版 OpenAI 字段的供应商所需的默认请求输出上限。 |
 
 简单理解：
 
 - `context_length` 和 `max_output_tokens` 是“告诉客户端这个模型能力有多大”。
-- `max_tokens` 是“默认这次请求让模型最多输出多少”。
+- `max_tokens` 和 `max_completion_tokens` 是同一请求上限的两种供应商字段，只配置官方文档要求的一种，代理不会同时发送。
 
 如果未来供应商修改模型上下文窗口，比如智谱把 `glm-5.2` 从 100 万上下文升级到 200 万，只需要改对应 JSON：
 
@@ -250,6 +254,7 @@ config/model-selection/
 | `execution.context_length` | 否 | 输入上下文窗口。 |
 | `execution.max_output_tokens` | 否 | 最大输出能力。 |
 | `execution.max_tokens` | 否 | 默认请求输出上限。 |
+| `execution.max_completion_tokens` | 否 | 使用新版 OpenAI 字段时的默认请求输出上限。 |
 | `execution.supports_tools` | 否 | 是否支持工具调用。 |
 | `execution.supports_vision` | 否 | 是否支持图片上下文。 |
 | `execution.family` | 否 | 模型家族标签。 |
@@ -362,79 +367,225 @@ curl http://localhost:11434/v1/chat/completions \
   }'
 ```
 
-## 自定义任意 OpenAI 兼容服务
+## 通过 `customopenai` 使用 Vercel AI Gateway
 
-如果服务支持：
+Vercel AI Gateway 提供 OpenAI 兼容的模型列表和 Chat Completions 接口。本项目
+已有的 `customopenai` Provider 可以直接连接，无需再增加 Vercel 专用 Provider。
 
-- `GET /v1/models`
-- `POST /v1/chat/completions`
-- `Authorization: Bearer <api-key>`
+### 1. 创建连接
 
-可以用 `customopenai`。完整步骤如下。
-
-1. 先查询上游模型列表，记录准确的模型 id：
+在 Vercel 中创建 AI Gateway API Key，并且只把它保存在本地 `.env` 文件中：
 
 ```bash
-curl https://api.example-provider.com/v1/models \
-  -H "Authorization: Bearer your-provider-key"
+PROVIDER_CUSTOMOPENAI_API_KEY=your-vercel-ai-gateway-key
+PROVIDER_CUSTOMOPENAI_BASE_URL=https://ai-gateway.vercel.sh
 ```
 
-2. 配置 API 根地址。不要带 `/v1`，代理会自动追加接口路径：
+Base URL 不要添加 `/v1`。本项目向上游发送请求时，会自行追加 `v1/models` 和
+`v1/chat/completions`。
+
+需要查看当前可用的准确模型 ID 时，可以查询上游模型列表：
 
 ```bash
-PROVIDER_CUSTOMOPENAI_API_KEY=your-provider-key
-PROVIDER_CUSTOMOPENAI_BASE_URL=https://api.example-provider.com
+curl https://ai-gateway.vercel.sh/v1/models
 ```
 
-3. 编辑 `config/model-selection/customopenai.json`：
+复制完整的上游模型 ID，包括 `meta/`、`kwaipilot/` 这样的创建者前缀。
+
+### 2. 配置一个模型
+
+仓库中的 `config/model-selection/customopenai.json` 已配置经过验证的 Vercel
+模型：
 
 ```json
 {
   "provider": "customopenai",
   "models": [
     {
-      "match": "example-coder-32b",
-      "display_name": "Example Coder",
+      "match": "meta/muse-spark-1.1",
+      "display_name": "Muse Spark 1.1",
       "priority": 1,
       "enabled": true,
       "execution": {
-        "context_length": 131072,
-        "max_output_tokens": 16384,
+        "context_length": 1048576,
+        "max_output_tokens": 1048576,
         "supports_tools": true,
-        "supports_vision": false,
-        "family": "example",
+        "supports_vision": true,
+        "supports_reasoning": true,
+        "family": "muse-spark",
         "temperature": 0.2,
-        "max_tokens": 8192,
-        "timeout_seconds": 180
+        "max_tokens": 65536,
+        "timeout_seconds": 300
       }
     }
   ]
 }
 ```
 
-把 `match` 换成上游 `/v1/models` 返回的真实 id。只有上游确实支持工具或图片时，才开启对应能力。
+主要字段含义如下：
 
-4. 重启代理并验证：
+| 字段 | 含义 |
+|---|---|
+| `match` | Vercel `/v1/models` 返回的准确模型 ID。 |
+| `display_name` | 客户端模型列表中显示的简短且唯一的名称。 |
+| `priority` | 显示和路由顺序；数字越小越靠前。 |
+| `enabled` | 是否通过本代理公开该模型。 |
+| `context_length` | 模型的输入上下文能力。 |
+| `max_output_tokens` | 向客户端声明的模型最大输出能力。 |
+| `supports_tools` | 是否声明工具或函数调用能力。 |
+| `supports_vision` | 是否声明图片输入能力。 |
+| `supports_reasoning` | 是否声明推理能力。 |
+| `max_tokens` | 客户端未指定时，本次请求使用的默认输出上限。 |
+| `timeout_seconds` | 该模型的上游请求超时时间。 |
+
+能力字段应以 Vercel 模型列表公布的数据为准。`max_tokens` 是单次请求默认值，
+可以小于模型能力字段 `max_output_tokens`。
+
+### 3. 在同一连接中添加多个模型
+
+在同一个 `models` 数组中继续添加对象即可。所有模型共用一组
+`PROVIDER_CUSTOMOPENAI_API_KEY` 和 `PROVIDER_CUSTOMOPENAI_BASE_URL`：
+
+```json
+{
+  "provider": "customopenai",
+  "models": [
+    {
+      "match": "meta/muse-spark-1.1",
+      "display_name": "Muse Spark 1.1",
+      "priority": 1,
+      "enabled": true,
+      "execution": {
+        "context_length": 1048576,
+        "max_output_tokens": 1048576,
+        "supports_tools": true,
+        "supports_vision": true,
+        "supports_reasoning": true,
+        "family": "muse-spark",
+        "temperature": 0.2,
+        "max_tokens": 65536,
+        "timeout_seconds": 300
+      }
+    },
+    {
+      "match": "kwaipilot/kat-coder-air-v2.5",
+      "display_name": "Kat Coder Air V2.5",
+      "priority": 2,
+      "enabled": true,
+      "execution": {
+        "context_length": 256000,
+        "max_output_tokens": 80000,
+        "supports_tools": true,
+        "supports_vision": false,
+        "supports_reasoning": true,
+        "family": "kat-coder",
+        "temperature": 0.2,
+        "max_tokens": 32768,
+        "timeout_seconds": 300
+      }
+    }
+  ]
+}
+```
+
+添加每个模型时需要注意：
+
+- `match` 必须等于上游的准确模型 ID。
+- `display_name` 应保持唯一，便于客户端区分模型。
+- 如果希望列表顺序稳定，请使用不同的 `priority`。
+- 只填写该模型实际支持的能力。
+
+### 4. 将较长的模型列表拆分为多个文件
+
+模型很多时，可以在 `config/model-selection/` 下创建多个 JSON 文件。文件名可以
+自定义，但每个文件都必须声明同一个 Provider。
+
+`config/model-selection/customopenai-muse.json`：
+
+```json
+{
+  "provider": "customopenai",
+  "models": [
+    {
+      "match": "meta/muse-spark-1.1",
+      "display_name": "Muse Spark 1.1",
+      "priority": 1,
+      "enabled": true,
+      "execution": {
+        "context_length": 1048576,
+        "max_output_tokens": 1048576,
+        "supports_tools": true,
+        "supports_vision": true,
+        "supports_reasoning": true,
+        "family": "muse-spark",
+        "max_tokens": 65536,
+        "timeout_seconds": 300
+      }
+    }
+  ]
+}
+```
+
+`config/model-selection/customopenai-coding.json`：
+
+```json
+{
+  "provider": "customopenai",
+  "models": [
+    {
+      "match": "kwaipilot/kat-coder-air-v2.5",
+      "display_name": "Kat Coder Air V2.5",
+      "priority": 2,
+      "enabled": true,
+      "execution": {
+        "context_length": 256000,
+        "max_output_tokens": 80000,
+        "supports_tools": true,
+        "supports_vision": false,
+        "supports_reasoning": true,
+        "family": "kat-coder",
+        "max_tokens": 32768,
+        "timeout_seconds": 300
+      }
+    }
+  ]
+}
+```
+
+加载器会合并所有 `provider` 为 `customopenai` 且 `match` 不重复的模型。不要在
+多个文件中重复配置同一个 `match`。拆分文件只用于整理模型列表，不会创建不同的
+API Key 或 Base URL；多个独立连接需要单独的 Provider 支持。
+
+### 5. 重启并验证
+
+模型选择文件只在启动时加载，因此每次修改 JSON 后都需要重启代理。先检查两种
+模型列表格式：
 
 ```bash
 curl http://localhost:11434/v1/models
 curl http://localhost:11434/api/tags
-curl http://localhost:11434/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -d '{"model":"Example Coder@customopenai","messages":[{"role":"user","content":"你好"}]}'
 ```
 
-Visual Studio/Copilot 使用本地地址 `http://localhost:11434`，模型名使用
-`/v1/models` 或 `/api/tags` 返回的值。若设置了 `PROXY_API_KEY`，客户端填写该
-本地代理 Key；否则填写任意非空值。
+测试非流式 OpenAI 兼容请求：
 
-常见问题：
+```bash
+curl http://localhost:11434/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{"model":"Muse Spark 1.1@customopenai","messages":[{"role":"user","content":"你好"}],"stream":false}'
+```
 
-- `401`：检查上游 API Key。
-- 请求路径出现 `/v1/v1/`：从 `PROVIDER_CUSTOMOPENAI_BASE_URL` 中删除 `/v1`。
-- 模型不显示：检查 `match`、`enabled`，并确认修改后已重启。
-- 路由错误：查看响应头 `X-Proxy-Provider`、`X-Proxy-Upstream-Model` 和
-  `X-Proxy-Resolved-Model`。
+测试流式请求：
+
+```bash
+curl http://localhost:11434/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{"model":"Muse Spark 1.1@customopenai","messages":[{"role":"user","content":"你好"}],"stream":true}'
+```
+
+OpenAI 兼容客户端使用 Base URL `http://localhost:11434/v1`。Visual Studio
+BYOM 或 Ollama 兼容客户端使用 `http://localhost:11434`。如果设置了
+`PROXY_API_KEY`，客户端填写该本地代理 Key；否则填写任意非空值。模型名称选择
+`/v1/models` 或 `/api/tags` 返回的值。
 
 ## display_name 有什么用
 

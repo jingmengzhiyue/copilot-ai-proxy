@@ -312,6 +312,29 @@ public class ImageSupportTests
         Assert.False(msg.TryGetProperty("images", out _));
     }
 
+    [Fact]
+    public void OpenAiToOllama_MapsCompletionLimitAndTopKToNativeOptions()
+    {
+        string request = """
+        {
+            "model": "qwen3-coder:480b",
+            "messages": [{"role": "user", "content": "Hello"}],
+            "max_completion_tokens": 4096,
+            "top_k": 40
+        }
+        """;
+
+        System.Reflection.MethodInfo method = typeof(OpenAiEndpoints).GetMethod(
+            "BuildOllamaChatRequest",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
+        string result = (string)method.Invoke(null, [request, "qwen3-coder:480b", false])!;
+
+        using JsonDocument parsed = JsonDocument.Parse(result);
+        JsonElement options = parsed.RootElement.GetProperty("options");
+        Assert.Equal(4096, options.GetProperty("num_predict").GetInt32());
+        Assert.Equal(40, options.GetProperty("top_k").GetInt32());
+    }
+
     // ──────────────────────────────────────────────────────────────────────
     //  TEST 4: Ollama → OpenAI — imagen única
     // ──────────────────────────────────────────────────────────────────────
@@ -456,14 +479,14 @@ public class ImageSupportTests
     }
 
     [Fact]
-    public void ModelSelectionStore_Moonshot_V1_128k_HasVision()
+    public void ModelSelectionStore_Moonshot_V1_128k_IsTextOnly()
     {
-        // moonshot-v1-128k en moonshot.json tiene supports_vision: true
+        // Moonshot exposes vision through separate -vision-preview model IDs.
         ModelSelectionEntry? entry = _store.FindModelSelectionEntry("moonshot-v1-128k", "moonshot");
 
         Assert.NotNull(entry);
         Assert.True(entry.Value.Enabled);
-        Assert.True(entry.Value.Execution.SupportsVision ?? false);
+        Assert.False(entry.Value.Execution.SupportsVision ?? false);
     }
 
     [Fact]
@@ -491,13 +514,12 @@ public class ImageSupportTests
     // ──────────────────────────────────────────────────────────────────────
 
     [Fact]
-    public void GetModelProfile_MoonshotV1128k_HasVisionCapability()
+    public void GetModelProfile_MoonshotV1128k_IsTextOnly()
     {
-        // moonshot-v1-128k tiene supports_vision: true en moonshot.json
         ModelExecutionConfig config = _store.GetExecutionConfigForModel("moonshot-v1-128k",
             new Dictionary<string, ProviderInfo>());
 
-        Assert.True(config.SupportsVision == true, "moonshot-v1-128k must have SupportsVision=true");
+        Assert.False(config.SupportsVision == true, "moonshot-v1-128k uses a separate vision-preview model family");
     }
 
     // ──────────────────────────────────────────────────────────────────────

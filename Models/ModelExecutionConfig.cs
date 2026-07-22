@@ -7,6 +7,7 @@ public record struct ModelExecutionConfig(
     double? Temperature = null,
     double? TopP = null,
     int? MaxTokensPreferred = null,
+    int? MaxCompletionTokensPreferred = null,
     string? ReasoningEffort = null,
     int? TimeoutSeconds = null,
     bool OverrideClientParams = false,

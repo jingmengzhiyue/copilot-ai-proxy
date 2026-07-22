@@ -159,7 +159,7 @@
       "priority": 10,
       "enabled": false,
       "execution": {
-        "context_length": 1048576,
+        "context_length": 1000000,
         "max_output_tokens": 384000,
         "supports_tools": true,
         "supports_vision": false,
@@ -175,8 +175,8 @@
       "priority": 11,
       "enabled": false,
       "execution": {
-        "context_length": 1048576,
-        "max_output_tokens": 131072,
+        "context_length": 1000000,
+        "max_output_tokens": 384000,
         "supports_tools": true,
         "supports_vision": false,
         "family": "deepseek",

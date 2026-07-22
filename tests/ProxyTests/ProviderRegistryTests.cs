@@ -175,27 +175,44 @@ public class ProviderRegistryTests
     }
 
     [Theory]
-    [InlineData("kimi", "KIMI", "https://api.moonshot.cn", "v1/chat/completions", "v1/models")]
-    [InlineData("zhipu", "ZHIPU", "https://open.bigmodel.cn/api/paas", "v4/chat/completions", "v4/models")]
-    [InlineData("qwen", "QWEN", "https://dashscope.aliyuncs.com/compatible-mode", "v1/chat/completions", "v1/models")]
-    [InlineData("customopenai", "CUSTOMOPENAI", "", "v1/chat/completions", "v1/models")]
+    [InlineData("kimi", "KIMI", "https://api.moonshot.cn", "v1/chat/completions", "v1/models", true)]
+    [InlineData("zhipu", "ZHIPU", "https://open.bigmodel.cn/api/paas", "v4/chat/completions", "v4/models", true)]
+    [InlineData("qwen", "QWEN", "https://dashscope.aliyuncs.com/compatible-mode", "v1/chat/completions", "v1/models", false)]
+    [InlineData("minimax", "MINIMAX", "https://api.minimax.io", "v1/chat/completions", "v1/models", false)]
+    [InlineData("customopenai", "CUSTOMOPENAI", "", "v1/chat/completions", "v1/models", false)]
     public void ProviderCapabilitiesRegistry_OpenAiCompatibleProviders_AreRegistered(
         string providerName,
         string envPrefix,
         string defaultBaseUrl,
         string chatPath,
-        string modelsPath)
+        string modelsPath,
+        bool supportsReasoningEffort)
     {
         ProviderCapabilities caps = ProviderCapabilitiesRegistry.Get(providerName);
 
         Assert.Equal(ApiFormat.OpenAi, caps.ApiFormat);
         Assert.Equal(ProviderCategory.Direct, caps.Category);
-        Assert.False(caps.SupportsReasoningEffort);
+        Assert.Equal(supportsReasoningEffort, caps.SupportsReasoningEffort);
         Assert.False(caps.SupportsTopK);
         Assert.Equal(envPrefix, caps.EnvPrefix);
         Assert.Equal(defaultBaseUrl, caps.DefaultBaseUrl);
         Assert.Equal(chatPath, caps.ChatPath);
         Assert.Equal(modelsPath, caps.ModelsPath);
+    }
+
+    [Fact]
+    public void ProviderCapabilitiesRegistry_Hunyuan_IsRegisteredForTokenHub()
+    {
+        ProviderCapabilities caps = ProviderCapabilitiesRegistry.Get("hunyuan");
+
+        Assert.Equal(ApiFormat.OpenAi, caps.ApiFormat);
+        Assert.Equal(ProviderCategory.Direct, caps.Category);
+        Assert.True(caps.SupportsReasoningEffort);
+        Assert.False(caps.SupportsTopK);
+        Assert.Equal("HUNYUAN", caps.EnvPrefix);
+        Assert.Equal("https://tokenhub.tencentmaas.com", caps.DefaultBaseUrl);
+        Assert.Equal("v1/chat/completions", caps.ChatPath);
+        Assert.Equal("v1/models", caps.ModelsPath);
     }
 
     [Fact]

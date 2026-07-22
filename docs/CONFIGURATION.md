@@ -177,13 +177,14 @@ config/model-selection/
 | `models[].execution.temperature` | float | No | Default temperature |
 | `models[].execution.top_p` | float | No | Default top_p |
 | `models[].execution.max_tokens` | int | No | Default max_tokens |
+| `models[].execution.max_completion_tokens` | int | No | Default max_completion_tokens; mutually exclusive with max_tokens |
 | `models[].execution.reasoning_effort` | string | No | "low", "medium", "high" |
 | `models[].execution.timeout_seconds` | int | No | Request timeout |
 | `models[].execution.override_client_params` | bool | No | Force-override client values |
 
 ### Override Client Params
 
-When `override_client_params: true`, the proxy overwrites client-supplied values for `temperature`, `top_p`, `max_tokens`, and `reasoning_effort` with the configured values.
+When `override_client_params: true`, the proxy overwrites client-supplied values for `temperature`, `top_p`, the configured output-limit field, and `reasoning_effort` with the configured values. Configure only one of `max_tokens` and `max_completion_tokens`.
 
 Currently enabled for:
 - Moonshot `kimi-k2.7-code`, `kimi-k2.6`, `kimi-k2.5`

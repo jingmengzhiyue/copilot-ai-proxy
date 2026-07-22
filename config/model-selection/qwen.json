@@ -2,8 +2,8 @@
   "provider": "qwen",
   "models": [
     {
-      "match": "qwen3-coder-plus",
-      "display_name": "Qwen Coder",
+      "match": "qwen3.7-max",
+      "display_name": "Qwen3.7 Max",
       "priority": 1,
       "enabled": true,
       "execution": {
@@ -11,42 +11,62 @@
         "max_output_tokens": 65536,
         "supports_tools": true,
         "supports_vision": false,
+        "supports_reasoning": true,
         "family": "qwen",
-        "temperature": 0.2,
-        "max_tokens": 16384,
-        "timeout_seconds": 240
+        "max_tokens": 65536,
+        "timeout_seconds": 300,
+        "override_client_params": false
       }
     },
     {
-      "match": "qwen-plus",
-      "display_name": "Qwen Plus",
+      "match": "qwen3.7-plus",
+      "display_name": "Qwen3.7 Plus",
       "priority": 2,
       "enabled": true,
       "execution": {
         "context_length": 1000000,
-        "max_output_tokens": 8192,
+        "max_output_tokens": 65536,
         "supports_tools": true,
-        "supports_vision": false,
+        "supports_vision": true,
+        "supports_reasoning": true,
         "family": "qwen",
-        "temperature": 0.2,
-        "max_tokens": 8192,
-        "timeout_seconds": 180
+        "max_tokens": 65536,
+        "timeout_seconds": 300,
+        "override_client_params": false
       }
     },
     {
-      "match": "qwen-turbo",
-      "display_name": "Qwen Turbo",
+      "match": "qwen3-coder-plus",
+      "display_name": "Qwen3 Coder Plus",
       "priority": 3,
       "enabled": true,
       "execution": {
         "context_length": 1000000,
-        "max_output_tokens": 8192,
+        "max_output_tokens": 65536,
         "supports_tools": true,
         "supports_vision": false,
+        "supports_reasoning": true,
         "family": "qwen",
-        "temperature": 0.2,
-        "max_tokens": 8192,
-        "timeout_seconds": 180
+        "max_tokens": 65536,
+        "timeout_seconds": 300,
+        "override_client_params": false
+      }
+    },
+    {
+      "match": "qwen3.6-flash",
+      "display_name": "Qwen3.6 Flash",
+      "priority": 4,
+      "enabled": true,
+      "execution": {
+        "context_length": 1000000,
+        "max_output_tokens": 65536,
+        "supports_tools": true,
+        "supports_vision": true,
+        "supports_reasoning": true,
+        "family": "qwen",
+        "max_tokens": 65536,
+        "timeout_seconds": 240,
+        "override_client_params": false
       }
     }
   ]

@@ -79,6 +79,7 @@ public class ModelSelectionTests
                             Temperature: execE.TryGetProperty("temperature", out JsonElement tempE) && tempE.ValueKind == JsonValueKind.Number ? tempE.GetDouble() : null,
                             TopP: execE.TryGetProperty("top_p", out JsonElement topPE) && topPE.ValueKind == JsonValueKind.Number ? topPE.GetDouble() : null,
                             MaxTokensPreferred: execE.TryGetProperty("max_tokens", out JsonElement maxTokE) && maxTokE.ValueKind == JsonValueKind.Number ? maxTokE.GetInt32() : null,
+                            MaxCompletionTokensPreferred: execE.TryGetProperty("max_completion_tokens", out JsonElement maxCompletionTokE) && maxCompletionTokE.ValueKind == JsonValueKind.Number ? maxCompletionTokE.GetInt32() : null,
                             ReasoningEffort: execE.TryGetProperty("reasoning_effort", out JsonElement reE) && reE.ValueKind == JsonValueKind.String ? reE.GetString() : null,
                             TimeoutSeconds: execE.TryGetProperty("timeout_seconds", out JsonElement timeoutE) && timeoutE.ValueKind == JsonValueKind.Number ? timeoutE.GetInt32() : null,
                             OverrideClientParams: execE.TryGetProperty("override_client_params", out JsonElement ovE) && ovE.ValueKind is JsonValueKind.True or JsonValueKind.False && ovE.GetBoolean()
@@ -252,6 +253,7 @@ public class ModelSelectionTests
         Assert.Null(cfg.Temperature);
         Assert.Null(cfg.TopP);
         Assert.Null(cfg.MaxTokensPreferred);
+        Assert.Null(cfg.MaxCompletionTokensPreferred);
         Assert.Null(cfg.ReasoningEffort);
         Assert.Null(cfg.TimeoutSeconds);
     }
@@ -293,6 +295,27 @@ public class ModelSelectionTests
         Assert.Equal(4096, exec.MaxTokensPreferred);
         Assert.Equal("high", exec.ReasoningEffort);
         Assert.Equal(60, exec.TimeoutSeconds);
+    }
+
+    [Fact]
+    public void LoadProviderModelSelections_ParsesMaxCompletionTokens()
+    {
+        string json = """
+            {
+              "provider": "test",
+              "models": [{
+                "match": "current-openai-model",
+                "execution": {
+                  "max_completion_tokens": 8192
+                }
+              }]
+            }
+            """;
+
+        ModelExecutionConfig exec = LoadFromJson(json)["test"][0].Execution;
+
+        Assert.Equal(8192, exec.MaxCompletionTokensPreferred);
+        Assert.Null(exec.MaxTokensPreferred);
     }
 
     // ── curated nvidia.json ──────────────────────────────────────────────────

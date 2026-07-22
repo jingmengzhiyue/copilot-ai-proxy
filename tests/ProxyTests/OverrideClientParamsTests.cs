@@ -4,8 +4,7 @@ namespace ProxyTests;
 
 /// <summary>
 /// Tests for the <c>override_client_params</c> flag on <see cref="ModelExecutionConfig"/>.
-/// When true, the proxy overwrites client-supplied temperature / top_p / max_tokens /
-/// reasoning_effort with the configured value (e.g. Kimi K2.x mandates temperature=1.0).
+/// When true, the proxy overwrites only client fields that have a configured fixed value.
 /// When false (or absent), the proxy only injects defaults for missing fields.
 /// </summary>
 public class OverrideClientParamsTests
@@ -13,20 +12,20 @@ public class OverrideClientParamsTests
     // ── RequestTransformer behavior ───────────────────────────────────────
 
     [Fact]
-    public void ApplyExecutionDefaults_OverrideClientParamsTrue_OverwritesClientTemperature()
+    public void ApplyExecutionDefaults_OverrideClientParamsTrue_KeepsUnconfiguredTemperature()
     {
-        // kimi-k2.6 in moonshot.json has override_client_params=true and temperature=1.0
+        // Kimi K2.6 fixes top_p only because temperature depends on thinking mode.
         RequestTransformer sut = CreateTransformer();
         string raw = """{"messages":[],"temperature":0.7}""";
 
         string result = sut.ApplyExecutionDefaults(raw, "kimi-k2.6", ProviderCapabilitiesRegistry.Get("moonshot"));
 
         using JsonDocument doc = JsonDocument.Parse(result);
-        Assert.Equal(1.0, doc.RootElement.GetProperty("temperature").GetDouble());
+        Assert.Equal(0.7, doc.RootElement.GetProperty("temperature").GetDouble());
     }
 
     [Fact]
-    public void ApplyExecutionDefaults_OverrideClientParamsTrue_OverwritesClientMaxTokens()
+    public void ApplyExecutionDefaults_OverrideClientParamsTrue_KeepsUnconfiguredMaxTokens()
     {
         RequestTransformer sut = CreateTransformer();
         string raw = """{"messages":[],"max_tokens":32000}""";
@@ -34,8 +33,7 @@ public class OverrideClientParamsTests
         string result = sut.ApplyExecutionDefaults(raw, "kimi-k2.6", ProviderCapabilitiesRegistry.Get("moonshot"));
 
         using JsonDocument doc = JsonDocument.Parse(result);
-        // kimi-k2.6's configured max_tokens is 4096
-        Assert.Equal(4096, doc.RootElement.GetProperty("max_tokens").GetInt32());
+        Assert.Equal(32000, doc.RootElement.GetProperty("max_tokens").GetInt32());
     }
 
     [Fact]
@@ -82,7 +80,7 @@ public class OverrideClientParamsTests
     }
 
     [Fact]
-    public void ApplyExecutionDefaults_OverrideClientParamsTrue_AppliesToAllForcedFields()
+    public void ApplyExecutionDefaults_OverrideClientParamsTrue_OnlyForcesConfiguredFields()
     {
         // Single test that exercises temperature, top_p, max_tokens, and reasoning_effort
         // (kimi-k2.6 has reasoning_effort absent in JSON, so reasoning_effort is NOT forced —
@@ -100,9 +98,9 @@ public class OverrideClientParamsTests
         string result = sut.ApplyExecutionDefaults(raw, "kimi-k2.6", ProviderCapabilitiesRegistry.Get("moonshot"));
 
         using JsonDocument doc = JsonDocument.Parse(result);
-        Assert.Equal(1.0, doc.RootElement.GetProperty("temperature").GetDouble());
+        Assert.Equal(0.2, doc.RootElement.GetProperty("temperature").GetDouble());
         Assert.Equal(0.95, doc.RootElement.GetProperty("top_p").GetDouble());
-        Assert.Equal(4096, doc.RootElement.GetProperty("max_tokens").GetInt32());
+        Assert.Equal(99999, doc.RootElement.GetProperty("max_tokens").GetInt32());
     }
 
     // ── ModelExecutionConfig defaults & parsing ───────────────────────────

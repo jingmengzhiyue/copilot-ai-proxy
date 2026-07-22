@@ -279,17 +279,19 @@ public class ModelCatalogServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task CustomOpenAi_OnlyProvider_ClaimsBareName()
+    public async Task CustomOpenAi_OnlyProvider_ClaimsMuseSparkAliases()
     {
         (ModelCatalogService catalog, ProviderRegistry registry, _) =
-            BuildCatalog(new Dictionary<string, string[]> { ["customopenai"] = ["custom-coding-model"] });
+            BuildCatalog(new Dictionary<string, string[]> { ["customopenai"] = ["meta/muse-spark-1.1"] });
 
         await catalog.RefreshAvailableModels(CancellationToken.None);
 
-        Assert.Equal("customopenai", registry.ResolveProvider("custom-coding-model").Name);
-        Assert.Equal("customopenai", registry.ModelToProvider["custom-coding-model"].Name);
-        Assert.Equal("customopenai", registry.ModelToProvider["custom-coding-model@customopenai"].Name);
-        Assert.Contains("custom-coding-model", catalog.AvailableModels);
+        Assert.Equal("customopenai", registry.ResolveProvider("meta/muse-spark-1.1").Name);
+        Assert.Equal("customopenai", registry.ModelToProvider["meta/muse-spark-1.1"].Name);
+        Assert.Equal("customopenai", registry.ModelToProvider["meta/muse-spark-1.1@customopenai"].Name);
+        Assert.Equal("customopenai", registry.ModelToProvider["Muse Spark 1.1"].Name);
+        Assert.Contains("meta/muse-spark-1.1", catalog.AvailableModels);
+        Assert.Contains("Muse Spark 1.1", catalog.AvailableModels);
     }
 
     [Fact]

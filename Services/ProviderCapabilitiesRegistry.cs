@@ -43,7 +43,7 @@ internal static class ProviderCapabilitiesRegistry
         ["kimi"] = new(
             Category: ProviderCategory.Direct,
             ApiFormat: ApiFormat.OpenAi,
-            SupportsReasoningEffort: false,
+            SupportsReasoningEffort: true,
             SupportsTopK: false,
             ChatPath: "v1/chat/completions",
             ModelsPath: "v1/models",
@@ -63,7 +63,7 @@ internal static class ProviderCapabilitiesRegistry
         ["zhipu"] = new(
             Category: ProviderCategory.Direct,
             ApiFormat: ApiFormat.OpenAi,
-            SupportsReasoningEffort: false,
+            SupportsReasoningEffort: true,
             SupportsTopK: false,
             ChatPath: "v4/chat/completions",
             ModelsPath: "v4/models",
@@ -80,6 +80,26 @@ internal static class ProviderCapabilitiesRegistry
             DefaultBaseUrl: "https://dashscope.aliyuncs.com/compatible-mode",
             EnvPrefix: "QWEN"),
 
+        ["minimax"] = new(
+            Category: ProviderCategory.Direct,
+            ApiFormat: ApiFormat.OpenAi,
+            SupportsReasoningEffort: false,
+            SupportsTopK: false,
+            ChatPath: "v1/chat/completions",
+            ModelsPath: "v1/models",
+            DefaultBaseUrl: "https://api.minimax.io",
+            EnvPrefix: "MINIMAX"),
+
+        ["hunyuan"] = new(
+            Category: ProviderCategory.Direct,
+            ApiFormat: ApiFormat.OpenAi,
+            SupportsReasoningEffort: true,
+            SupportsTopK: false,
+            ChatPath: "v1/chat/completions",
+            ModelsPath: "v1/models",
+            DefaultBaseUrl: "https://tokenhub.tencentmaas.com",
+            EnvPrefix: "HUNYUAN"),
+
         ["customopenai"] = new(
             Category: ProviderCategory.Direct,
             ApiFormat: ApiFormat.OpenAi,
@@ -93,7 +113,7 @@ internal static class ProviderCapabilitiesRegistry
         ["cerebras"] = new(
             Category: ProviderCategory.Direct,
             ApiFormat: ApiFormat.OpenAi,
-            SupportsReasoningEffort: false,
+            SupportsReasoningEffort: true,
             SupportsTopK: false,
             ChatPath: "v1/chat/completions",
             ModelsPath: "v1/models",
@@ -104,7 +124,7 @@ internal static class ProviderCapabilitiesRegistry
         ["nvidia"] = new(
             Category: ProviderCategory.MultiModel,
             ApiFormat: ApiFormat.OpenAi,
-            SupportsReasoningEffort: false,
+            SupportsReasoningEffort: true,
             SupportsTopK: true,
             ChatPath: "v1/chat/completions",
             ModelsPath: "v1/models",
@@ -114,7 +134,7 @@ internal static class ProviderCapabilitiesRegistry
         ["openrouter"] = new(
             Category: ProviderCategory.MultiModel,
             ApiFormat: ApiFormat.OpenAi,
-            SupportsReasoningEffort: false,
+            SupportsReasoningEffort: true,
             SupportsTopK: true,
             ChatPath: "v1/chat/completions",
             ModelsPath: "v1/models",
@@ -124,7 +144,7 @@ internal static class ProviderCapabilitiesRegistry
         ["groq"] = new(
             Category: ProviderCategory.MultiModel,
             ApiFormat: ApiFormat.OpenAi,
-            SupportsReasoningEffort: false,
+            SupportsReasoningEffort: true,
             SupportsTopK: true,
             ChatPath: "v1/chat/completions",
             ModelsPath: "v1/models",
@@ -135,7 +155,7 @@ internal static class ProviderCapabilitiesRegistry
         ["zenmux"] = new(
             Category: ProviderCategory.MultiModel,
             ApiFormat: ApiFormat.OpenAi,
-            SupportsReasoningEffort: false,
+            SupportsReasoningEffort: true,
             SupportsTopK: false,
             ChatPath: "v1/chat/completions",
             ModelsPath: "v1/models",
@@ -147,7 +167,7 @@ internal static class ProviderCapabilitiesRegistry
             Category: ProviderCategory.MultiModel,
             ApiFormat: ApiFormat.Ollama,
             SupportsReasoningEffort: false,
-            SupportsTopK: false,
+            SupportsTopK: true,
             ChatPath: "api/chat",
             ModelsPath: "api/tags",
             DefaultBaseUrl: "https://ollama.com",

@@ -37,6 +37,8 @@ Only providers with configured credentials are active at runtime.
 | `openai` | OpenAI | OpenAI-compatible | `https://api.openai.com` | `PROVIDER_OPENAI_API_KEY` |
 | `zhipu` | Zhipu / BigModel | OpenAI-compatible | `https://open.bigmodel.cn/api/paas` | `PROVIDER_ZHIPU_API_KEY` |
 | `qwen` | Qwen / DashScope compatible mode | OpenAI-compatible | `https://dashscope.aliyuncs.com/compatible-mode` | `PROVIDER_QWEN_API_KEY` |
+| `minimax` | MiniMax | OpenAI-compatible | `https://api.minimax.io` | `PROVIDER_MINIMAX_API_KEY` |
+| `hunyuan` | Tencent Hunyuan / TokenHub | OpenAI-compatible | `https://tokenhub.tencentmaas.com` | `PROVIDER_HUNYUAN_API_KEY` |
 | `google` | Google Gemini OpenAI-compatible API | OpenAI-compatible | `https://generativelanguage.googleapis.com` | `PROVIDER_GOOGLE_API_KEY` |
 | `nvidia` | NVIDIA NIM | OpenAI-compatible | `https://integrate.api.nvidia.com` | `PROVIDER_NVIDIA_API_KEY` |
 | `openrouter` | OpenRouter | OpenAI-compatible | `https://openrouter.ai/api` | `PROVIDER_OPENROUTER_API_KEY` |
@@ -46,10 +48,11 @@ Only providers with configured credentials are active at runtime.
 | `cerebras` | Cerebras | OpenAI-compatible | `https://api.cerebras.ai` | `PROVIDER_CEREBRAS_API_KEY` |
 | `zenmux` | ZenMux | OpenAI-compatible aggregator | `https://zenmux.ai/api` | `PROVIDER_ZENMUX_API_KEY` |
 | `ollama` | Ollama Cloud or local Ollama | Ollama API | `https://ollama.com` | `PROVIDER_OLLAMACLOUD_API_KEY` |
-| `customopenai` | Any OpenAI-compatible service | OpenAI-compatible | none | `PROVIDER_CUSTOMOPENAI_API_KEY` |
+| `customopenai` | Any OpenAI-compatible service, including Vercel AI Gateway | OpenAI-compatible | none | `PROVIDER_CUSTOMOPENAI_API_KEY` |
 
 `customopenai` has no default base URL. You must set
-`PROVIDER_CUSTOMOPENAI_BASE_URL`.
+`PROVIDER_CUSTOMOPENAI_BASE_URL`. The Vercel example uses
+`https://ai-gateway.vercel.sh`.
 
 ## Requirements
 
@@ -272,83 +275,229 @@ curl http://localhost:11434/v1/chat/completions \
   }'
 ```
 
-## Generic OpenAI-compatible providers
+## Vercel AI Gateway through `customopenai`
 
-Use `customopenai` when a provider supports:
+Vercel AI Gateway exposes an OpenAI-compatible model catalog and Chat
+Completions API. The existing `customopenai` provider can connect to it without
+adding a Vercel-specific provider.
 
-- `GET /v1/models`
-- `POST /v1/chat/completions`
-- `Authorization: Bearer <api-key>`
+### 1. Create the connection
 
-1. Query the upstream catalog and copy the exact model id:
-
-```bash
-curl https://api.example-provider.com/v1/models \
-  -H "Authorization: Bearer your-provider-key"
-```
-
-2. Configure the API root. Do not include `/v1`; the proxy adds the endpoint
-paths itself.
+Create an AI Gateway API key in Vercel and keep it only in the local `.env`
+file:
 
 ```bash
-PROVIDER_CUSTOMOPENAI_API_KEY=your-provider-key
-PROVIDER_CUSTOMOPENAI_BASE_URL=https://api.example-provider.com
+PROVIDER_CUSTOMOPENAI_API_KEY=your-vercel-ai-gateway-key
+PROVIDER_CUSTOMOPENAI_BASE_URL=https://ai-gateway.vercel.sh
 ```
 
-3. Edit `config/model-selection/customopenai.json`:
+Do not add `/v1` to the Base URL. This project appends `v1/models` and
+`v1/chat/completions` when it sends requests upstream.
+
+Query the upstream catalog when you need the current model IDs:
+
+```bash
+curl https://ai-gateway.vercel.sh/v1/models
+```
+
+Always copy the complete upstream ID, including its creator prefix such as
+`meta/` or `kwaipilot/`.
+
+### 2. Configure one model
+
+The repository includes the verified Vercel model in
+`config/model-selection/customopenai.json`:
 
 ```json
 {
   "provider": "customopenai",
   "models": [
     {
-      "match": "example-coder-32b",
-      "display_name": "Example Coder",
+      "match": "meta/muse-spark-1.1",
+      "display_name": "Muse Spark 1.1",
       "priority": 1,
       "enabled": true,
       "execution": {
-        "context_length": 131072,
-        "max_output_tokens": 16384,
+        "context_length": 1048576,
+        "max_output_tokens": 1048576,
         "supports_tools": true,
-        "supports_vision": false,
-        "family": "example",
+        "supports_vision": true,
+        "supports_reasoning": true,
+        "family": "muse-spark",
         "temperature": 0.2,
-        "max_tokens": 8192,
-        "timeout_seconds": 180
+        "max_tokens": 65536,
+        "timeout_seconds": 300
       }
     }
   ]
 }
 ```
 
-Set `match` to the exact id returned by the upstream catalog. Set capability
-fields only when the upstream model supports them.
+The important fields are:
 
-4. Restart the proxy and verify discovery and routing:
+| Field | Meaning |
+|---|---|
+| `match` | Exact model ID returned by Vercel `/v1/models`. |
+| `display_name` | Short, unique name shown in client model lists. |
+| `priority` | Display and routing order; lower values come first. |
+| `enabled` | Whether the model is exposed by this proxy. |
+| `context_length` | Model input context capability. |
+| `max_output_tokens` | Model output capability advertised to clients. |
+| `supports_tools` | Enables tool/function calling metadata. |
+| `supports_vision` | Enables image input metadata. |
+| `supports_reasoning` | Enables reasoning capability metadata. |
+| `max_tokens` | Default request output limit when the client omits one. |
+| `timeout_seconds` | Upstream request timeout for this model. |
+
+Use capability values published by the upstream catalog. `max_tokens` is a
+per-request default and can be lower than the model's advertised
+`max_output_tokens`.
+
+### 3. Add multiple models to one connection
+
+Add another object to the same `models` array. Every entry shares the single
+`PROVIDER_CUSTOMOPENAI_API_KEY` and `PROVIDER_CUSTOMOPENAI_BASE_URL` connection:
+
+```json
+{
+  "provider": "customopenai",
+  "models": [
+    {
+      "match": "meta/muse-spark-1.1",
+      "display_name": "Muse Spark 1.1",
+      "priority": 1,
+      "enabled": true,
+      "execution": {
+        "context_length": 1048576,
+        "max_output_tokens": 1048576,
+        "supports_tools": true,
+        "supports_vision": true,
+        "supports_reasoning": true,
+        "family": "muse-spark",
+        "temperature": 0.2,
+        "max_tokens": 65536,
+        "timeout_seconds": 300
+      }
+    },
+    {
+      "match": "kwaipilot/kat-coder-air-v2.5",
+      "display_name": "Kat Coder Air V2.5",
+      "priority": 2,
+      "enabled": true,
+      "execution": {
+        "context_length": 256000,
+        "max_output_tokens": 80000,
+        "supports_tools": true,
+        "supports_vision": false,
+        "supports_reasoning": true,
+        "family": "kat-coder",
+        "temperature": 0.2,
+        "max_tokens": 32768,
+        "timeout_seconds": 300
+      }
+    }
+  ]
+}
+```
+
+For each model:
+
+- Keep `match` equal to the exact upstream ID.
+- Use a unique `display_name` so clients can distinguish models.
+- Use unique priorities when you want a stable list order.
+- Include only capabilities supported by that model.
+
+### 4. Split a large model list across files
+
+For a long list, create multiple files under `config/model-selection/`. File
+names are arbitrary; every file must still declare the same provider.
+
+`config/model-selection/customopenai-muse.json`:
+
+```json
+{
+  "provider": "customopenai",
+  "models": [
+    {
+      "match": "meta/muse-spark-1.1",
+      "display_name": "Muse Spark 1.1",
+      "priority": 1,
+      "enabled": true,
+      "execution": {
+        "context_length": 1048576,
+        "max_output_tokens": 1048576,
+        "supports_tools": true,
+        "supports_vision": true,
+        "supports_reasoning": true,
+        "family": "muse-spark",
+        "max_tokens": 65536,
+        "timeout_seconds": 300
+      }
+    }
+  ]
+}
+```
+
+`config/model-selection/customopenai-coding.json`:
+
+```json
+{
+  "provider": "customopenai",
+  "models": [
+    {
+      "match": "kwaipilot/kat-coder-air-v2.5",
+      "display_name": "Kat Coder Air V2.5",
+      "priority": 2,
+      "enabled": true,
+      "execution": {
+        "context_length": 256000,
+        "max_output_tokens": 80000,
+        "supports_tools": true,
+        "supports_vision": false,
+        "supports_reasoning": true,
+        "family": "kat-coder",
+        "max_tokens": 32768,
+        "timeout_seconds": 300
+      }
+    }
+  ]
+}
+```
+
+The loader merges non-duplicate models from all files whose `provider` is
+`customopenai`. Do not repeat the same `match` in multiple files. Splitting files
+only organizes models; it does not create separate API keys or Base URLs.
+
+### 5. Restart and verify
+
+Model-selection files are loaded at startup, so restart the proxy after every
+JSON change. Verify both model-list formats:
 
 ```bash
 curl http://localhost:11434/v1/models
 curl http://localhost:11434/api/tags
-curl http://localhost:11434/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -d '{"model":"Example Coder@customopenai","messages":[{"role":"user","content":"Hello"}]}'
 ```
 
-For Visual Studio/Copilot, use local base URL `http://localhost:11434`, any
-non-empty local API key unless `PROXY_API_KEY` is set, and the model name shown
-by `/v1/models` or `/api/tags`.
+Test a non-streaming OpenAI-compatible request:
 
-Common failures:
+```bash
+curl http://localhost:11434/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{"model":"Muse Spark 1.1@customopenai","messages":[{"role":"user","content":"Hello"}],"stream":false}'
+```
 
-- `401`: check the upstream API key.
-- `404` with `/v1/v1/...`: remove `/v1` from `PROVIDER_CUSTOMOPENAI_BASE_URL`.
-- Model missing: make sure the upstream id matches `models[].match`, the entry
-  is enabled, and the proxy was restarted.
-- Wrong route: inspect `X-Proxy-Provider`, `X-Proxy-Upstream-Model`, and
-  `X-Proxy-Resolved-Model` response headers.
+Test streaming:
 
-Restart the proxy after changing JSON files. Model selection files are loaded at
-startup and are not hot-reloaded.
+```bash
+curl http://localhost:11434/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{"model":"Muse Spark 1.1@customopenai","messages":[{"role":"user","content":"Hello"}],"stream":true}'
+```
+
+For OpenAI-compatible clients, use Base URL `http://localhost:11434/v1`. For
+Visual Studio BYOM/Ollama-compatible clients, use `http://localhost:11434`.
+Enter any non-empty local API key unless `PROXY_API_KEY` is set, and select a
+model name returned by `/v1/models` or `/api/tags`.
 
 ## How model selection works
 
@@ -414,6 +563,7 @@ Example:
 | `temperature` | Default temperature injected when the client omits it. |
 | `top_p` | Default top-p injected when the client omits it and the provider supports it. |
 | `max_tokens` | Default request `max_tokens` injected when the client omits it. |
+| `max_completion_tokens` | Default request `max_completion_tokens` for providers that use the current OpenAI field. |
 | `reasoning_effort` | Default reasoning effort for providers that support it. |
 | `timeout_seconds` | Per-model upstream request timeout. |
 | `override_client_params` | When `true`, configured defaults overwrite client-supplied values. |
@@ -438,8 +588,9 @@ Ollama-compatible clients.
 `context_length` and `max_output_tokens` are intentionally separate.
 `context_length` is the input context window that clients can use for prompt and
 conversation sizing. `max_output_tokens` is the model's output capacity.
-`max_tokens` is different: it is the default output limit sent to the upstream
-provider when a client does not specify a request limit.
+`max_tokens` and `max_completion_tokens` are different from capability metadata:
+they are alternative request fields for the default output limit sent upstream.
+Configure only the field documented by that provider; the proxy never sends both.
 
 ### Image context support
 

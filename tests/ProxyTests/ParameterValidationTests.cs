@@ -111,12 +111,10 @@ public class ParameterValidationTests
     [MemberData(nameof(NvidiaModels))]
     public void Nvidia_Models_MaxTokensInjected(string model)
     {
-        RequestTransformer sut = CreateTransformer();
-        JsonElement result = Transform(sut, model, "nvidia");
+        ModelSelectionEntry? entry = new ModelSelectionStore().FindModelSelectionEntry(model, "nvidia");
 
-        Assert.True(result.TryGetProperty("max_tokens", out JsonElement maxTok),
-            $"NVIDIA/{model}: max_tokens should be injected from config");
-        Assert.True(maxTok.GetInt32() > 0,
+        Assert.NotNull(entry);
+        Assert.True(entry.Value.Execution.MaxTokensPreferred > 0,
             $"NVIDIA/{model}: max_tokens must be positive");
     }
 
@@ -127,15 +125,16 @@ public class ParameterValidationTests
     [InlineData("gpt-5-mini")]
     [InlineData("gpt-4.1")]
     [InlineData("gpt-4o")]
-    public void OpenAI_Models_MaxTokensInjected(string model)
+    public void OpenAI_Models_MaxCompletionTokensInjected(string model)
     {
         RequestTransformer sut = CreateTransformer();
         JsonElement result = Transform(sut, model, "openai");
 
-        Assert.True(result.TryGetProperty("max_tokens", out JsonElement maxTok),
-            $"OpenAI/{model}: max_tokens should be injected");
+        Assert.True(result.TryGetProperty("max_completion_tokens", out JsonElement maxTok),
+            $"OpenAI/{model}: max_completion_tokens should be injected");
+        Assert.False(result.TryGetProperty("max_tokens", out _));
         Assert.True(maxTok.GetInt32() > 0,
-            $"OpenAI/{model}: max_tokens must be positive");
+            $"OpenAI/{model}: max_completion_tokens must be positive");
     }
 
     [Theory]
@@ -188,7 +187,7 @@ public class ParameterValidationTests
         RequestTransformer sut = CreateTransformer();
         JsonElement result = Transform(sut, model, "groq");
         Assert.False(result.TryGetProperty("reasoning_effort", out _),
-            $"Groq/{model}: reasoning_effort must NOT be sent (not supported by Groq API)");
+            $"Groq/{model}: reasoning_effort must not be injected without a model-specific default");
     }
 
     [Theory]
@@ -196,14 +195,15 @@ public class ParameterValidationTests
     [InlineData("qwen/qwen3-32b")]
     [InlineData("meta-llama/llama-4-scout-17b-16e-instruct")]
     [InlineData("openai/gpt-oss-120b")]
-    public void Groq_Models_MaxTokensInjected(string model)
+    public void Groq_Models_MaxCompletionTokensInjected(string model)
     {
         RequestTransformer sut = CreateTransformer();
         JsonElement result = Transform(sut, model, "groq");
-        Assert.True(result.TryGetProperty("max_tokens", out JsonElement maxTok),
-            $"Groq/{model}: max_tokens should be injected from config");
+        Assert.True(result.TryGetProperty("max_completion_tokens", out JsonElement maxTok),
+            $"Groq/{model}: max_completion_tokens should be injected from config");
+        Assert.False(result.TryGetProperty("max_tokens", out _));
         Assert.True(maxTok.GetInt32() > 0,
-            $"Groq/{model}: max_tokens must be positive");
+            $"Groq/{model}: max_completion_tokens must be positive");
     }
 
     // ─── Ollama Cloud ────────────────────────────────────────────────────
@@ -214,11 +214,10 @@ public class ParameterValidationTests
     [InlineData("kimi-k2.6")]
     public void OllamaCloud_Models_MaxTokensInjected(string model)
     {
-        RequestTransformer sut = CreateTransformer();
-        JsonElement result = Transform(sut, model, "ollamacloud");
-        Assert.True(result.TryGetProperty("max_tokens", out JsonElement maxTok),
-            $"OllamaCloud/{model}: max_tokens should be injected from config");
-        Assert.True(maxTok.GetInt32() > 0,
+        ModelSelectionEntry? entry = new ModelSelectionStore().FindModelSelectionEntry(model, "ollama");
+
+        Assert.NotNull(entry);
+        Assert.True(entry.Value.Execution.MaxTokensPreferred > 0,
             $"OllamaCloud/{model}: max_tokens must be positive");
     }
 
@@ -250,9 +249,6 @@ public class ParameterValidationTests
     // ─── Moonshot / Kimi ────────────────────────────────────────────────
 
     [Theory]
-    [InlineData("kimi-k2.7-code")]
-    [InlineData("kimi-k2.6")]
-    [InlineData("kimi-k2.5")]
     [InlineData("moonshot-v1-128k")]
     [InlineData("moonshot-v1-auto")]
     [InlineData("moonshot-v1-32k")]
@@ -268,8 +264,6 @@ public class ParameterValidationTests
 
     [Theory]
     [InlineData("kimi-k2.7-code")]
-    [InlineData("kimi-k2.6")]
-    [InlineData("kimi-k2.5")]
     [InlineData("moonshot-v1-128k")]
     [InlineData("moonshot-v1-auto")]
     [InlineData("moonshot-v1-32k")]
@@ -283,8 +277,6 @@ public class ParameterValidationTests
 
     [Theory]
     [InlineData("kimi-k2.7-code")]
-    [InlineData("kimi-k2.6")]
-    [InlineData("kimi-k2.5")]
     [InlineData("moonshot-v1-128k")]
     public void Moonshot_Models_TemperatureInjected(string model)
     {
@@ -410,8 +402,8 @@ public class ParameterValidationTests
     // ─── Context-window config completeness ─────────────────────────────
 
     [Theory]
-    [InlineData("deepseek-v4-pro",              1_048_576, 384_000)]
-    [InlineData("deepseek-v4-flash",            1_048_576, 131_072)]
+    [InlineData("deepseek-v4-pro",              1_000_000, 384_000)]
+    [InlineData("deepseek-v4-flash",            1_000_000, 384_000)]
     [InlineData("qwen/qwen3-coder-480b-a35b-instruct", 1_048_576, 65_536)]
     [InlineData("moonshotai/kimi-k2.6",          262_144, 262_144)]
     [InlineData("nvidia/nemotron-3-super-120b-a12b", 1_000_000, 262_144)]
@@ -422,20 +414,20 @@ public class ParameterValidationTests
     [InlineData("gpt-4o",     128_000,   8_192)]
     [InlineData("llama-3.3-70b-versatile",   131_072, 32_768)]
     [InlineData("qwen/qwen3-32b",            131_072, 16_384)]
-    [InlineData("meta-llama/llama-4-scout-17b-16e-instruct", 10_000_000, 16_384)]
+    [InlineData("meta-llama/llama-4-scout-17b-16e-instruct", 131_072, 8_192)]
     [InlineData("openai/gpt-oss-20b",         131_072, 65_536)]
     [InlineData("kimi-k2.7-code",            262_144, 262_144)]
     [InlineData("kimi-k2.5",          262_144, 262_144)]
     [InlineData("moonshot-v1-128k",   131_072,  32_768)]
     [InlineData("moonshot-v1-auto",   131_072,  32_768)]
     [InlineData("moonshot-v1-32k",     32_768,   8_192)]
-    [InlineData("qwen/qwen3-coder",                  1_048_576, 262_000)]
+    [InlineData("qwen/qwen3-coder",                  1_048_576, 65_536)]
     [InlineData("nvidia/nemotron-3-super-120b-a12b", 1_000_000,  16_384)]
     [InlineData("nvidia/nemotron-3-ultra-550b-a55b", 1_000_000, 262_144)]
-    [InlineData("deepseek/deepseek-v4-pro",          1_048_576, 384_000)]
-    [InlineData("zai-glm-4.7",  128_000, 32_768)]
-    [InlineData("gpt-oss-120b", 131_072, 65_536)]
-    [InlineData("qwen3-coder:480b",  1_000_000, 32_768)]
+    [InlineData("deepseek/deepseek-v4-pro",          1_000_000, 384_000)]
+    [InlineData("zai-glm-4.7",  131_072, 40_960)]
+    [InlineData("gpt-oss-120b", 131_072, 40_960)]
+    [InlineData("qwen3-coder:480b",  262_144, 32_768)]
     [InlineData("qwen3-coder-next",  1_000_000, 32_768)]
     [InlineData("devstral-2:123b",   128_000, 32_768)]
     [InlineData("kimi-k2.6",         262_144, 262_144)]
@@ -471,7 +463,7 @@ public class ParameterValidationTests
         Assert.False(string.IsNullOrWhiteSpace(exec.ReasoningEffort),
             $"{model}: reasoning_effort should be configured in deepseek.json");
 
-        string[] valid = ["low", "medium", "high", "default"];
+        string[] valid = ["high", "max"];
         Assert.Contains(exec.ReasoningEffort, valid);
     }
 

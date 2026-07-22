@@ -501,9 +501,11 @@ internal static class OpenAiEndpoints
 
         bool hasTemperature = root.TryGetProperty("temperature", out JsonElement temp);
         bool hasTopP = root.TryGetProperty("top_p", out JsonElement topP);
-        bool hasMaxTokens = root.TryGetProperty("max_tokens", out JsonElement maxTokens);
+        bool hasTopK = root.TryGetProperty("top_k", out JsonElement topK);
+        bool hasMaxTokens = root.TryGetProperty("max_completion_tokens", out JsonElement maxTokens)
+            || root.TryGetProperty("max_tokens", out maxTokens);
 
-        if (hasTemperature || hasTopP || hasMaxTokens)
+        if (hasTemperature || hasTopP || hasTopK || hasMaxTokens)
         {
             writer.WritePropertyName("options");
             writer.WriteStartObject();
@@ -515,6 +517,11 @@ internal static class OpenAiEndpoints
             if (hasTopP && topP.ValueKind == JsonValueKind.Number)
             {
                 writer.WriteNumber("top_p", topP.GetDouble());
+            }
+
+            if (hasTopK && topK.ValueKind == JsonValueKind.Number)
+            {
+                writer.WriteNumber("top_k", topK.GetInt32());
             }
 
             if (hasMaxTokens && maxTokens.ValueKind == JsonValueKind.Number)
