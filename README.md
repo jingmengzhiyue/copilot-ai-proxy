@@ -60,43 +60,9 @@ Only providers with configured credentials are active at runtime.
 - Source build: .NET 10 SDK, or Docker.
 - At least one provider API key, unless you only use local Ollama.
 
-## Release builds
+## Project Installation
 
-For most users, the easiest installation path is a GitHub release zip. Each
-release package is self-contained and includes:
-
-- `ai-proxy-hub` or `ai-proxy-hub.exe`
-- `.env.example`
-- `config/model-selection/*.json`
-- `README.md`
-- `README.zh-CN.md`
-- A platform start script
-
-Download the package for your operating system:
-
-| Package | Use on |
-|---|---|
-| `copilot-ai-proxy-vX.Y.Z-win-x64.zip` | Windows x64 |
-| `copilot-ai-proxy-vX.Y.Z-linux-x64.zip` | Linux x64 |
-| `copilot-ai-proxy-vX.Y.Z-osx-x64.zip` | Intel macOS |
-| `copilot-ai-proxy-vX.Y.Z-osx-arm64.zip` | Apple Silicon macOS |
-
-Run it:
-
-```powershell
-# Windows
-Expand-Archive .\copilot-ai-proxy-vX.Y.Z-win-x64.zip
-cd .\copilot-ai-proxy-vX.Y.Z-win-x64
-.\start-windows.cmd
-```
-
-```bash
-# Linux/macOS
-unzip copilot-ai-proxy-vX.Y.Z-linux-x64.zip
-cd copilot-ai-proxy-vX.Y.Z-linux-x64
-chmod +x ./start-unix.sh ./ai-proxy-hub
-./start-unix.sh
-```
+Regular users are recommended to download this project first and install the .NET SDK dependencies.
 
 On the first run, the start script creates `.env` from `.env.example` and asks
 you to edit it. Add at least one provider API key, then start the proxy again.

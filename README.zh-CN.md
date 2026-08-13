@@ -41,44 +41,11 @@ http://localhost:11434
 `customopenai` 必须额外配置 `PROVIDER_CUSTOMOPENAI_BASE_URL`。Vercel 示例使用
 `https://ai-gateway.vercel.sh`。
 
-## Release 版本
+## 项目安装
 
-普通用户推荐优先下载 GitHub Release 里的 zip 包。Release 包是自包含的，不需要用户安装 .NET SDK。
+普通用户推荐优先下载本项目并且安装 .NET SDK依赖。
 
-每个 Release 包包含：
 
-- `ai-proxy-hub` 或 `ai-proxy-hub.exe`
-- `.env.example`
-- `config/model-selection/*.json`
-- `README.md`
-- `README.zh-CN.md`
-- 对应平台的启动脚本
-
-根据系统下载对应文件：
-
-| 包名 | 适用系统 |
-|---|---|
-| `copilot-ai-proxy-vX.Y.Z-win-x64.zip` | Windows x64 |
-| `copilot-ai-proxy-vX.Y.Z-linux-x64.zip` | Linux x64 |
-| `copilot-ai-proxy-vX.Y.Z-osx-x64.zip` | Intel macOS |
-| `copilot-ai-proxy-vX.Y.Z-osx-arm64.zip` | Apple Silicon macOS |
-
-Windows：
-
-```powershell
-Expand-Archive .\copilot-ai-proxy-vX.Y.Z-win-x64.zip
-cd .\copilot-ai-proxy-vX.Y.Z-win-x64
-.\start-windows.cmd
-```
-
-Linux/macOS：
-
-```bash
-unzip copilot-ai-proxy-vX.Y.Z-linux-x64.zip
-cd copilot-ai-proxy-vX.Y.Z-linux-x64
-chmod +x ./start-unix.sh ./ai-proxy-hub
-./start-unix.sh
-```
 
 首次运行时，启动脚本会从 `.env.example` 复制出 `.env`，然后提示你编辑配置。填好至少一个 Provider API Key 后，再次启动代理即可。
 
