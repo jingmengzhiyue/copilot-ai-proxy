@@ -43,9 +43,12 @@ http://localhost:11434
 
 ## 项目安装
 
-普通用户推荐优先下载本项目并且安装 .NET SDK依赖。
+克隆本仓库，并安装 .NET 10 SDK 依赖：
 
+- 官方下载：https://dotnet.microsoft.com/zh-cn/download/dotnet/10.0
+- Windows 也可以直接用 winget 安装：`winget install Microsoft.DotNet.SDK.10`
 
+安装完成后运行 `dotnet --version` 验证，显示 10.x 即可。
 
 首次运行时，启动脚本会从 `.env.example` 复制出 `.env`，然后提示你编辑配置。填好至少一个 Provider API Key 后，再次启动代理即可。
 
@@ -620,23 +623,6 @@ dotnet test tests/ProxyTests/ProxyTests.csproj `
   -p:BaseOutputPath=$bin `
   -p:BaseIntermediateOutputPath=$obj
 ```
-
-## 创建 Release
-
-维护者可以在本地生成 Release 包：
-
-```powershell
-.\scripts\package-release.ps1 -Version vX.Y.Z
-```
-
-也可以推送版本 tag，让 GitHub Actions 自动发布：
-
-```bash
-git tag vX.Y.Z
-git push origin vX.Y.Z
-```
-
-`Release` workflow 会先运行测试，然后为 Windows、Linux、macOS 生成自包含 zip 包，并上传到 GitHub Release。
 
 ## 常见问题
 

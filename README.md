@@ -56,13 +56,14 @@ Only providers with configured credentials are active at runtime.
 
 ## Requirements
 
-- Release zip: no .NET SDK required.
-- Source build: .NET 10 SDK, or Docker.
+- .NET 10 SDK ([download](https://dotnet.microsoft.com/download/dotnet/10.0);
+  on Windows you can also run `winget install Microsoft.DotNet.SDK.10`),
+  or Docker.
 - At least one provider API key, unless you only use local Ollama.
 
 ## Project Installation
 
-Regular users are recommended to download this project first and install the .NET SDK dependencies.
+Clone this repository and install the .NET 10 SDK dependency.
 
 On the first run, the start script creates `.env` from `.env.example` and asks
 you to edit it. Add at least one provider API key, then start the proxy again.
@@ -732,24 +733,6 @@ dotnet test --filter "FullyQualifiedName~ModelSelectionStoreTests"
 dotnet test --filter "FullyQualifiedName~ModelCatalogServiceTests"
 dotnet test --filter "FullyQualifiedName~ProviderRegistryTests"
 ```
-
-## Creating a release
-
-Maintainers can create local release packages with:
-
-```powershell
-.\scripts\package-release.ps1 -Version vX.Y.Z
-```
-
-To publish a GitHub release, push a version tag:
-
-```bash
-git tag vX.Y.Z
-git push origin vX.Y.Z
-```
-
-The `Release` workflow tests the project, creates self-contained packages for
-Windows, Linux, and macOS, and uploads the zip files to the GitHub release.
 
 ## Troubleshooting
 
