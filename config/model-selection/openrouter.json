@@ -2,7 +2,7 @@
   "provider": "openrouter",
   "models": [
     {
-      "match": "qwen/qwen3.7-plus",
+      "match": "openai/gpt-5.6-sol",
       "priority": 1,
       "enabled": true,
       "execution": {
@@ -18,7 +18,7 @@
       }
     },
     {
-      "match": "qwen/qwen3-coder",
+      "match": "google/gemini-3.7-flash:batch",
       "priority": 2,
       "enabled": true,
       "execution": {
@@ -34,7 +34,7 @@
       }
     },
     {
-      "match": "nvidia/nemotron-3-super-120b-a12b",
+      "match": "meta/muse-spark-1.2-contributor",
       "priority": 3,
       "enabled": true,
       "execution": {
@@ -50,7 +50,7 @@
       }
     },
     {
-      "match": "nvidia/nemotron-3-ultra-550b-a55b",
+      "match": "nvidia/nemotron-3-ultra-550b-a55b:free",
       "priority": 4,
       "enabled": true,
       "execution": {
@@ -98,7 +98,7 @@
       }
     },
     {
-      "match": "moonshotai/kimi-k2.6",
+      "match": "anthropic/claude-sonnet-5:batch",
       "priority": 7,
       "enabled": true,
       "execution": {
