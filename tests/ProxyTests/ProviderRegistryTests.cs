@@ -176,6 +176,7 @@ public class ProviderRegistryTests
 
     [Theory]
     [InlineData("kimi", "KIMI", "https://api.moonshot.cn", "v1/chat/completions", "v1/models", true)]
+    [InlineData("kimicode", "KIMICODE", "https://api.kimi.com/coding", "v1/chat/completions", "v1/models", true)]
     [InlineData("zhipu", "ZHIPU", "https://open.bigmodel.cn/api/paas", "v4/chat/completions", "v4/models", true)]
     [InlineData("qwen", "QWEN", "https://dashscope.aliyuncs.com/compatible-mode", "v1/chat/completions", "v1/models", false)]
     [InlineData("minimax", "MINIMAX", "https://api.minimax.io", "v1/chat/completions", "v1/models", false)]

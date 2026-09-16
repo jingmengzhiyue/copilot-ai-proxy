@@ -40,6 +40,16 @@ internal static class ProviderCapabilitiesRegistry
             DefaultBaseUrl: "https://api.moonshot.ai",
             EnvPrefix: "MOONSHOT"),
 
+        ["kimicode"] = new(
+            Category: ProviderCategory.Direct,
+            ApiFormat: ApiFormat.OpenAi,
+            SupportsReasoningEffort: true,
+            SupportsTopK: false,
+            ChatPath: "v1/chat/completions",
+            ModelsPath: "v1/models",
+            DefaultBaseUrl: "https://api.kimi.com/coding",
+            EnvPrefix: "KIMICODE"),
+
         ["kimi"] = new(
             Category: ProviderCategory.Direct,
             ApiFormat: ApiFormat.OpenAi,

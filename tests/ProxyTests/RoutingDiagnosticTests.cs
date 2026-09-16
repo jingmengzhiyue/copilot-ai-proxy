@@ -35,6 +35,7 @@ public class RoutingDiagnosticTests : IDisposable
             "PROVIDER_GOOGLE_API_KEY", "PROVIDER_GOOGLE_BASE_URL",
             "PROVIDER_MOONSHOT_API_KEY", "PROVIDER_MOONSHOT_BASE_URL",
             "PROVIDER_KIMI_API_KEY", "PROVIDER_KIMI_BASE_URL",
+            "PROVIDER_KIMICODE_API_KEY", "PROVIDER_KIMICODE_BASE_URL",
             "PROVIDER_CEREBRAS_API_KEY", "PROVIDER_CEREBRAS_BASE_URL",
             "PROVIDER_ZENMUX_API_KEY", "PROVIDER_ZENMUX_BASE_URL",
             "DEEPSEEK_API_KEY", "DEEPSEEK_BASE_URL",
@@ -55,6 +56,29 @@ public class RoutingDiagnosticTests : IDisposable
     }
 
     private const string AnyKey = "test-key";
+
+    [Theory]
+    [InlineData("k3", 1048576)]
+    [InlineData("k3-256k", 262144)]
+    [InlineData("kimi-for-coding", 1048576)]
+    [InlineData("kimi-for-coding-highspeed", 262144)]
+    public async Task KimiCode_OfficialModels_RouteWithCorrectContext(string model, int contextLength)
+    {
+        var (catalog, registry, _) = BuildCatalog(new Dictionary<string, string[]>
+        {
+            ["kimi"] = ["kimi-k3"],
+            ["kimicode"] = ["k3", "k3-256k", "kimi-for-coding", "kimi-for-coding-highspeed"]
+        });
+
+        await catalog.RefreshAvailableModels(CancellationToken.None);
+
+        Assert.Equal("kimicode", registry.ResolveProvider(model).Name);
+        var candidate = Assert.Single(registry.ResolveCandidates($"{model}@kimicode"));
+        Assert.Equal("kimicode", candidate.Provider.Name);
+        Assert.Equal(model, candidate.UpstreamModel);
+        Assert.Equal(contextLength, catalog.GetExecutionConfigForModel(model, "kimicode").ContextLength);
+        Assert.Equal("kimi", registry.ResolveProvider("kimi-k3@kimi").Name);
+    }
 
     [Fact]
     public void EnvironmentSnapshot_RestoresHostKimiConfiguration()

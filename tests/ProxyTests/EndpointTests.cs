@@ -81,6 +81,8 @@ public sealed class ProxyFixture : IDisposable
         Environment.SetEnvironmentVariable("PROVIDER_OLLAMACLOUD_API_KEY", null);
         Environment.SetEnvironmentVariable("PROVIDER_KIMI_API_KEY", null);
         Environment.SetEnvironmentVariable("PROVIDER_KIMI_BASE_URL", null);
+        Environment.SetEnvironmentVariable("PROVIDER_KIMICODE_API_KEY", null);
+        Environment.SetEnvironmentVariable("PROVIDER_KIMICODE_BASE_URL", null);
         Environment.SetEnvironmentVariable("DEEPSEEK_API_KEY", null);
 
         // 3. Start the proxy via WebApplicationFactory

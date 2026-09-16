@@ -45,6 +45,7 @@ Only providers with configured credentials are active at runtime.
 | `groq` | Groq | OpenAI-compatible | `https://api.groq.com/openai` | `PROVIDER_GROQ_API_KEY` |
 | `moonshot` | Moonshot / Kimi | OpenAI-compatible | `https://api.moonshot.ai` | `PROVIDER_MOONSHOT_API_KEY` |
 | `kimi` | Kimi China | OpenAI-compatible | `https://api.moonshot.cn` | `PROVIDER_KIMI_API_KEY` |
+| `kimicode` | Kimi Code subscription | OpenAI-compatible | `https://api.kimi.com/coding` | `PROVIDER_KIMICODE_API_KEY` |
 | `cerebras` | Cerebras | OpenAI-compatible | `https://api.cerebras.ai` | `PROVIDER_CEREBRAS_API_KEY` |
 | `zenmux` | ZenMux | OpenAI-compatible aggregator | `https://zenmux.ai/api` | `PROVIDER_ZENMUX_API_KEY` |
 | `ollama` | Ollama Cloud or local Ollama | Ollama API | `https://ollama.com` | `PROVIDER_OLLAMACLOUD_API_KEY` |
@@ -785,3 +786,27 @@ Licensed under the Apache License 2.0. See [LICENSE](LICENSE).
 ## Acknowledgements
 
 This project was forked from [iqmeta/copilot-ollama-multi-provider-ai-proxy](https://github.com/iqmeta/copilot-ollama-multi-provider-ai-proxy) and has undergone extensive modifications.
+
+### Kimi Code subscription
+
+Create a subscription API key in the Kimi Code console, set
+`PROVIDER_KIMICODE_API_KEY=your-kimi-code-key` in `.env`, and restart the service.
+The official OpenAI-compatible endpoint is `https://api.kimi.com/coding/v1`.
+The proxy appends `v1/chat/completions` and `v1/models`, so the optional
+`PROVIDER_KIMICODE_BASE_URL` must be `https://api.kimi.com/coding` without `/v1`.
+
+| Model | Request model ID | Context limit |
+| --- | --- | --- |
+| K3 | `k3@kimicode` | 1M, depending on membership |
+| K3 256K | `k3-256k@kimicode` | 256K |
+| K2.8 Preview | `kimi-for-coding@kimicode` | 1M |
+| K2.7 Code HighSpeed | `kimi-for-coding-highspeed@kimicode` | 256K |
+
+K3 requires Moderato or higher; its 1M context and the HighSpeed model require
+Allegretto or higher. K2.8 uses the official ID `kimi-for-coding`.
+The separate `kimicode` provider leaves existing `kimi` and `moonshot` settings intact.
+K3 and K2.8 accept `reasoning_effort` values `low`, `high`, and `max`;
+omitting it preserves the upstream default. Models are configured in
+`config/model-selection/kimicode.json`.
+
+Source: [Official Kimi Code model configuration](https://www.kimi.com/code/docs/kimi-code/models.html).

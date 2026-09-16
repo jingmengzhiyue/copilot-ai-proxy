@@ -33,6 +33,7 @@ http://localhost:11434
 | `groq` | Groq | `https://api.groq.com/openai` | `PROVIDER_GROQ_API_KEY` |
 | `moonshot` | Moonshot / Kimi | `https://api.moonshot.ai` | `PROVIDER_MOONSHOT_API_KEY` |
 | `kimi` | Kimi 国内开放平台 | `https://api.moonshot.cn` | `PROVIDER_KIMI_API_KEY` |
+| `kimicode` | Kimi Code 会员套餐 | `https://api.kimi.com/coding` | `PROVIDER_KIMICODE_API_KEY` |
 | `cerebras` | Cerebras | `https://api.cerebras.ai` | `PROVIDER_CEREBRAS_API_KEY` |
 | `zenmux` | ZenMux | `https://zenmux.ai/api` | `PROVIDER_ZENMUX_API_KEY` |
 | `ollama` | Ollama Cloud 或本地 Ollama | `https://ollama.com` | `PROVIDER_OLLAMACLOUD_API_KEY` |
@@ -183,6 +184,7 @@ config/model-selection/
 | `openai.json` | OpenAI 模型 |
 | `moonshot.json` | Moonshot / Kimi 模型 |
 | `kimi.json` | Kimi 国内开放平台模型 |
+| `kimicode.json` | Kimi Code 套餐：K3、K3 256K、K2.8 Preview、K2.7 Code 高速版 |
 | `ollamacloud.json` | Ollama Cloud 模型 |
 
 ## 模型配置格式
@@ -665,3 +667,31 @@ dotnet test tests/ProxyTests/ProxyTests.csproj `
 ```text
 README.md
 ```
+
+### Kimi Code 会员套餐
+
+在 Kimi Code 控制台创建套餐 API Key，并在 `.env` 中设置：
+
+```env
+PROVIDER_KIMICODE_API_KEY=your-kimi-code-key
+```
+
+默认使用官方 OpenAI 兼容接口 `https://api.kimi.com/coding/v1`。项目会自动追加
+`v1/chat/completions` 和 `v1/models`，因此如需显式设置
+`PROVIDER_KIMICODE_BASE_URL`，请填写 `https://api.kimi.com/coding`（不带 `/v1`）。
+保存后重启服务以加载密钥。
+
+| 模型 | 请求中的 model | 上下文上限 |
+| --- | --- | --- |
+| K3 | `k3@kimicode` | 1M，取决于会员档位 |
+| K3 256K | `k3-256k@kimicode` | 256K |
+| K2.8 Preview | `kimi-for-coding@kimicode` | 1M |
+| K2.7 Code HighSpeed | `kimi-for-coding-highspeed@kimicode` | 256K |
+
+K2.8 的官方 ID 是 `kimi-for-coding`。K3 需要 Moderato 及以上，
+K3 的 1M 上下文与高速版需要 Allegretto 及以上。套餐密钥单独配置到
+`kimicode`，现有 `kimi` 与 `moonshot` 继续用于开放平台。
+K3 和 K2.8 可传入 `reasoning_effort` 的 `low`、`high`、`max`；
+未指定时保留服务端默认值。模型配置位于 `config/model-selection/kimicode.json`。
+
+来源：[Kimi Code 官方模型配置](https://www.kimi.com/code/docs/kimi-code/models.html)。

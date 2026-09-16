@@ -1,0 +1,57 @@
+{
+  "provider": "kimicode",
+  "models": [
+    {
+      "match": "k3",
+      "priority": 1,
+      "enabled": true,
+      "execution": {
+        "context_length": 1048576,
+        "supports_tools": true,
+        "supports_vision": true,
+        "supports_reasoning": true,
+        "family": "kimi",
+        "timeout_seconds": 300
+      }
+    },
+    {
+      "match": "k3-256k",
+      "priority": 2,
+      "enabled": true,
+      "execution": {
+        "context_length": 262144,
+        "supports_tools": true,
+        "supports_vision": true,
+        "supports_reasoning": true,
+        "family": "kimi",
+        "timeout_seconds": 300
+      }
+    },
+    {
+      "match": "kimi-for-coding",
+      "priority": 3,
+      "enabled": true,
+      "execution": {
+        "context_length": 1048576,
+        "supports_tools": true,
+        "supports_vision": true,
+        "supports_reasoning": true,
+        "family": "kimi",
+        "timeout_seconds": 300
+      }
+    },
+    {
+      "match": "kimi-for-coding-highspeed",
+      "priority": 4,
+      "enabled": true,
+      "execution": {
+        "context_length": 262144,
+        "supports_tools": true,
+        "supports_vision": true,
+        "supports_reasoning": true,
+        "family": "kimi",
+        "timeout_seconds": 300
+      }
+    }
+  ]
+}

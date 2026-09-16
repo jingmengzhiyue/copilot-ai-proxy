@@ -87,14 +87,14 @@ internal sealed class FakeProviderHandler : DelegatingHandler
         // meant ollama-shaped providers returned 404 and never contributed to discovery.
         foreach (string name in _openAiBodies.Keys)
         {
-            if (host.StartsWith(name, StringComparison.OrdinalIgnoreCase))
+            if (host.Equals($"{name}.test", StringComparison.OrdinalIgnoreCase))
             {
                 return name;
             }
         }
         foreach (string name in _ollamaBodies.Keys)
         {
-            if (host.StartsWith(name, StringComparison.OrdinalIgnoreCase))
+            if (host.Equals($"{name}.test", StringComparison.OrdinalIgnoreCase))
             {
                 return name;
             }
