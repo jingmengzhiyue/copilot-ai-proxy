@@ -384,3 +384,326 @@ dotnet test ai-proxy-hub.sln --no-build   # 469/469 通过，0 跳过（.NET SDK
 -  真实模型目录逐项核对（哪些 id 实际存在）超出本轮无密钥范围。
 
 **审计局限**：本清单不声称找出所有问题；`tests/ProxyTests/` 未逐行通读，基准/压测脚本仅表面审查，第三方依赖的内部行为未超出已用版本（net10.0 / Mvc.Testing 10.0.0-preview.5）的表面核对。
+
+---
+
+## Grok 独立审计
+
+### 审计基线和范围
+
+- **审计人**：Grok（第二轮独立审计及交叉复核 agent）。
+- **审计日期**：2026-09-17。
+- **开始时 HEAD**：`main` @ `065ca11ec8ce8172b9856ae98718513d32721c55`（`kimi 审阅完成，生成issu.md`），工作区干净，相对 `origin/main` 超前 3 个提交。
+- **结束时 HEAD**：`65a6b72d9b32566fefdf0e1544f4583fee76c04d`（`删除不合时宜的讨厌的CLAUDE.md`）。审计过程中仓库又多了一次只删 `CLAUDE.md` 的提交；**未改任何业务代码、配置、依赖或测试，未提交、未推送**。Kimi 原文所引 `CLAUDE.md` 行号在当前树中已不存在，交叉复核中单独标注。
+- **Kimi 审计时 HEAD**：`f3741c0` + 当时未提交的路由修复（随后作为 `132c89f` 提交）。当前业务代码与 Kimi 所审的脏工作区一致，`65a6b72` 不改变下列缺陷的代码路径。
+- **独立排查约束**：先读源码/配置/测试/文档并建立模块清单，再打开 `issue.md`。中途一次全仓 `grep` 误命中过 `issue.md`，但独立结论以源码通读和本轮 stub 复现为准，不以 Kimi 编号为前提。
+- **基线验证**：`dotnet test tests/ProxyTests/ProxyTests.csproj -c Debug` → **469/469 通过，0 失败，0 跳过**。测试通过不构成缺陷不存在的反证。
+- **复现环境**：临时目录 `C:\Users\jingm\AppData\Local\Temp\grok-audit-repro`，Python stub + `bin\Debug\net10.0\ai-proxy-hub.exe`，伪密钥，CWD 不含仓库 `.env`。未连接生产、未读取 `.env` 值、未打印密钥。
+- **排除项**：`bin/`、`obj/`、`artifacts/`、`images/`、第三方 `Microsoft.*` / xUnit 程序集内部、真实上游 HTTP（无真实密钥）。`scripts/` 压测脚本仅表面审查。`README.zh-CN.md` 未逐句核对。未实际 `docker build`。
+
+### 覆盖表
+
+| 模块 | 检查深度 | 执行的检查 | 未覆盖 |
+|---|---|---|---|
+| `Program.cs` | 全量 | .env 加载、监听、启动目录刷新 | — |
+| `Endpoints/OpenAiEndpoints.cs` | 全量 + stub 复现 | 路由头、failover、流式、Ollama 转换、异常 | 双候选流式 failover 未单独起第二 stub |
+| `Endpoints/OllamaEndpoints.cs` | 全量 + stub 复现 | tags/show/chat、硬编码路径、传输异常、tool_calls 解析 | 真实 Ollama Cloud NDJSON |
+| `Endpoints/HealthEndpoints.cs` | 全量 | 字段名、认证耦合 | — |
+| `Services/ModelCatalogService.cs` | 全量 + stub | ResolveRoute、发现匹配、刷新时间戳 | 真实 Google `/models` 响应 |
+| `Services/ProviderRegistry.cs` | 全量 + stub | DiscoverProviders、NormalizeBaseUrl、双 ollama | — |
+| `Services/ModelSelectionStore.cs` | 全量 | 双文件合并、子串/精确匹配、kimicode 缺采样默认 | — |
+| `Services/RequestTransformer.cs` | 全量 + stub | 早退跳过过滤、ModifyRequest 键、非数组 messages | — |
+| `Services/ChatStreamingService.cs` | 全量 | SSE 转换、缓存写入键、超时 token | 未做超长流压测 |
+| `Services/ReasoningCacheService.cs` | 全量 + 单测对照 | 全局计数 vs 请求内 idx、无淘汰 | 未重复跑 Kimi 的双会话注入 harness |
+| `Services/OllamaResponseBuilder.cs` / `ProviderBenchmarkService.cs` / `Infrastructure/*` / `Models/*` | 全量 | 假 digest、认证比较、HttpClient 超时、能力表 | Benchmark 默认关闭，未对真实 API 探测 |
+| `config/model-selection/*.json`（18 个） | 全量阅读 | kimicode/google/ollama 合并、override 缺口 | 真实目录 id 全集 |
+| `tests/ProxyTests/` | 清单 + 关键文件 + 全量运行 | 469 通过；夹具未清全部 provider 键 | 未逐行通读全部测试 |
+| CI / Docker / 打包 | 全量阅读 | 触发分支、nightly 镜像、`.env.example` 拷贝 | 未 docker build |
+| 文档 | 与代码对照 | 错误码、诊断头、env 优先级 | `README.zh-CN.md` |
+
+### 数据流（检查用）
+
+客户端 → `ProxyAuthenticationMiddleware`（可选）→ `/v1/chat/completions` 或 `/api/chat` → `ModelCatalogService.ResolveRoute` → `RequestTransformer`（部分路径）→ `ProviderInfo.Client` + `Capabilities.ChatPath`（部分路径被硬编码覆盖）→ `ChatStreamingService` / JSON 转换 → 客户端。失败路径在 `/v1` 与 `/api/chat` 不对称。
+
+### 已确认问题
+
+#### GROK-001 `/api/chat` 流式硬编码 `v1/chat/completions`，zhipu/google 流式打到错误路径
+
+- **类型**：功能
+- **严重程度**：**P1**。VS BYOM 主路径 `/api/chat` + `stream:true` 对 `ChatPath ≠ v1/chat/completions` 的 provider 全部不可用。
+- **状态**：已确认（独立端到端复现）
+- **定位**：`Endpoints/OllamaEndpoints.cs:371`；对照 `:332` 非流式使用 `Capabilities.ChatPath`。
+- **函数/符号**：`MapOllamaEndpoints` 流式 OpenAI 转换分支
+- **预期与实际**：预期 zhipu 走 `v4/chat/completions`；实际流式走 `v1/chat/completions`。
+- **触发条件**：`POST /api/chat` `stream:true`，路由到 zhipu 或 google。
+- **影响**：该两家的 Ollama 兼容流式聊天失败（上游 404）。
+- **根因**：流式分支未读取 `ProviderCapabilities.ChatPath`。
+- **证据 / 复现**：stub 日志：非流式 `POST /v4/chat/completions`，流式 `POST /v1/chat/completions`，同模型 `/v1/chat/completions` 流式仍正确打到 `/v4/chat/completions`。结果文件 `C:\Users\jingm\AppData\Local\Temp\grok-audit-repro\results.txt` 节 `STUB_AFTER_ZHIPU`。
+- **对应**：与 **KIMI-001** 同根因，独立复现。Kimi 的 stub 因 Base URL 含 `/api/paas` 而记为 `/api/paas/v1/...`，本轮 stub 根路径故记为 `/v1` vs `/v4`，缺陷相同。
+- **修复方向**：流式改为 `ollamaProvider.Capabilities.ChatPath`；`:289` 的 `"api/chat"` 一并改为能力表。
+- **回归验证**：stub 只监听 `v4/chat/completions`，断言 `/api/chat` 流式命中该路径。
+
+#### GROK-002 kimicode 未强制 temperature/top_p，Copilot 采样参数会触发 Kimi Coding API 400
+
+- **类型**：功能 / 配置
+- **严重程度**：**P1**。Kimi 官方文档写明 k3 / kimi-for-coding 的 `temperature` 固定 1.0、`top_p` 固定 0.95，传入其他值报错。GitHub Copilot / VS 常带 `temperature≈0–0.2`。这与仓库提交说明「kimi 编程套餐存在 bug」直接对应，且 **Kimi 清单未单列此配置缺口**。
+- **状态**：已确认（配置 + 转换器早退 + stub 抓包 + 官方文档）
+- **定位**：
+  - `config/model-selection/kimicode.json:5-55`（四条 enabled 模型均无 `temperature`/`top_p`/`override_client_params`，只有 `timeout_seconds` 等）
+  - `Services/RequestTransformer.cs:24-31`（没有任何采样默认时直接 `return rawBody`，连 `top_k` 剥离也不做）
+  - 对照 `config/model-selection/kimi.json:5-20`（`kimi-k3` 有 `temperature:1.0` + `override_client_params:true`）
+- **函数/符号**：`RequestTransformer.ApplyExecutionDefaults`
+- **预期与实际**：预期发往 `https://api.kimi.com/coding` 的请求要么省略 temperature/top_p，要么强制 1.0/0.95；实际把客户端 `temperature:0.2, top_p:0.1` 原样转发。
+- **触发条件**：配置 `PROVIDER_KIMICODE_API_KEY` 后，客户端（尤其 Copilot）对 `k3`/`k3-256k`/`kimi-for-coding`/`kimi-for-coding-highspeed` 带非 1.0 温度发起聊天。
+- **影响**：Kimi Coding 套餐请求被上游 `invalid_request_error` 拒绝，表现为「有 key 却不能用」。
+- **根因**：kimicode 配置未按官方固定参数建模；转换器在「无任何 sampling 默认」时整段跳过，不会剥离或改写客户端字段。
+- **证据**：官方参数表 https://platform.kimi.com/docs/api/models-overview （kimi-k3 / kimi-k2.7-code temperature 固定 1.0，其它值报错）。本轮 stub：`POST /v1/chat/completions` body `{"model":"k3",...,"temperature":0.2,"top_p":0.1,"stream":false}`。
+- **对应**：无 KIMI 单号。与 KIMI-013（Ollama 直通跳过默认值）机制不同：此处是 OpenAI 面已调用 `ApplyExecutionDefaults` 但仍早退。
+- **修复方向**：为 kimicode 四条模型设置 `override_client_params:true` 且 `temperature:1.0`/`top_p:0.95`，或在 force 模式下删除这两个字段；同时取消「无默认则整段 return」的早退，过滤逻辑应始终执行。
+- **回归验证**：`k3@kimicode` 请求带 `temperature:0.2`，断言上游 body 为 1.0 或不含该字段。
+
+#### GROK-003 `/api/chat` 上游传输失败未捕获，返回空 body 的 HTTP 500
+
+- **类型**：可靠性
+- **严重程度**：**P1**。Ollama 兼容面（VS BYOM）在超时/断连时得到不可解析的 500，而 `/v1` 已有 502 JSON。
+- **状态**：已确认（独立端到端复现）
+- **定位**：`Endpoints/OllamaEndpoints.cs:331`（本轮堆栈）；同文件 `:273`、`:290`、`:377` 同样无 try/catch。
+- **函数/符号**：`MapOllamaEndpoints` OpenAI-format 非流式 `SendAsync`
+- **预期与实际**：预期 502/`upstream_unavailable`；实际未处理 `HttpRequestException` → Kestrel 500、body 长度 0。
+- **触发条件**：`/api/chat` 目标 provider 拒绝连接、DNS 失败或 `timeout_seconds` 触发。
+- **影响**：客户端无结构化错误；代理错误日志刷屏。
+- **根因**：`/api/chat` 未复用 `/v1` 的传输容错。
+- **证据**：moonshot Base URL `http://127.0.0.1:1`：`/api/chat` → 500 空 body，日志 `HttpRequestException` at `OllamaEndpoints.cs:331`；同请求 `/v1/chat/completions` → 502 `code:upstream_unavailable`。
+- **对应**：**KIMI-003**，独立复现（本轮用连接拒绝而非挂起 stub；结论相同）。
+- **修复方向**：四处 `SendAsync` 捕获传输异常，客户端未取消时返回 502 JSON。
+- **回归验证**：死端口 + `/api/chat` 断言 502 且 JSON 含 `upstream_unavailable`。
+
+#### GROK-004 推理缓存写键用全局计数、读键用请求内下标，跨会话串话
+
+- **类型**：功能 / 隐私
+- **严重程度**：**P1**。共享代理时，后续会话的第一条无 tool_calls assistant 消息会注入进程内早期会话的 `reasoning_content`。
+- **状态**：已确认（静态证据链完整；单测固定了错误键空间。未重复跑 Kimi 的双会话注入 harness）
+- **定位**：写：`ReasoningCacheService.NextAssistantKey`（`Services/ReasoningCacheService.cs:11`）、`CacheReasoningFromResponse` `:56`、`ChatStreamingService.cs:89`。读：`RequestTransformer.ModifyRequest` `:247` `assistant:{idx++}`，`idx` 每请求从 0 起。
+- **函数/符号**：`NextAssistantKey` vs `ModifyRequest`
+- **预期与实际**：预期按会话/消息身份取回推理；实际只有进程第一次响应时读写键碰巧都是 `assistant:0`，之后新会话固定命中旧条目。
+- **触发条件**：任意推理模型写缓存后，另一会话带 assistant 历史且无 tool_calls。
+- **影响**：错误推理上下文进入上游；共享部署下跨用户泄露。
+- **根因**：两种键派生从未对齐。`ReasoningCacheServiceTests` 只断言全局递增；`RequestTransformerTests` 手工 `Set("assistant:0")`，掩盖集成错位。
+- **证据**：代码对照 + `ReasoningCacheServiceTests.NextAssistantKey_ReturnsSequentialKeys` / `CacheReasoningFromResponse_SequentialCalls_IncrementAssistantKeys`。
+- **对应**：**KIMI-002**（同根因）。无界增长见交叉复核 KIMI-010，不另编号。
+- **修复方向**：键绑定会话或消息指纹；读写同一派生；加 TTL/容量。
+- **回归验证**：会话 A 写入后，会话 B 上游 body 不得含 A 的 reasoning_content。
+
+#### GROK-005 `/v1/chat/completions` 对非数组 `messages` 返回 500
+
+- **类型**：接口协议
+- **严重程度**：**P2**。违背同文件「畸形 body 是 400」注释（`OpenAiEndpoints.cs:111`）。
+- **状态**：已确认（独立复现）
+- **定位**：`Services/RequestTransformer.cs:227` `EnumerateArray()`；调用点 `Endpoints/OpenAiEndpoints.cs:196` 无 try/catch。
+- **函数/符号**：`ModifyRequest`
+- **预期与实际**：预期 400 `invalid_request_error`；实际 `InvalidOperationException` → 500 空 body。
+- **触发条件**：`messages` 为 string/object/number。
+- **影响**：客户端看到无 JSON 的 500。
+- **根因**：解析 JSON 对象后未校验 `messages` 类型。
+- **证据**：`{"model":"deepseek-v4-pro@deepseek","messages":"x"}` → 500；日志 `JsonElement.EnumerateArray` at `RequestTransformer.cs:227` at `OpenAiEndpoints.cs:196`。
+- **对应**：**KIMI-005**。
+- **修复方向**：路由前校验数组；`ModifyRequest` 对非数组返回 null。
+- **回归验证**：messages 非数组 → 400。
+
+#### GROK-006 `/api/chat` 非流式把缺 `content` 的 tool_calls 响应打成 500
+
+- **类型**：可靠性
+- **严重程度**：**P2**。编码代理核心路径（工具调用）在多家 OpenAI 兼容上游的真实形态下崩溃。
+- **状态**：已确认（独立复现 HTTP 500；本轮日志在进程结束前未刷出 `KeyNotFoundException` 行，但状态码与代码路径闭合）
+- **定位**：`Endpoints/OllamaEndpoints.cs:346-354` `GetProperty("choices")[0].GetProperty("message")` / `GetProperty("content")`
+- **函数/符号**：`MapOllamaEndpoints` 非流式 OpenAI 响应转换
+- **预期与实际**：缺 `content` 应按空串；实际 `GetProperty` 抛异常。
+- **触发条件**：`/api/chat` `stream:false`，上游 message 仅有 `tool_calls`。
+- **影响**：工具调用轮次失败。
+- **根因**：按「必有 content 字符串」解析。
+- **证据**：stub `STUB_MODE=tool_no_content` → `/api/chat` HTTP 500。
+- **对应**：**KIMI-004**。
+- **修复方向**：`TryGetProperty`；空 `choices` 单独 502/400。
+- **回归验证**：tool_calls-only、`content:null`、空 choices。
+
+#### GROK-007 google.json 的 `models/` 前缀与 OpenAI 兼容目录裸 id 对不上，发现失败且上游 id 错误
+
+- **类型**：功能 / 配置
+- **严重程度**：**P1**（配置了 Google 后，`/v1/models` 看不到 Gemini；按 `/api/tags` 点选则会把 `models/gemini-…` 发给 OpenAI 兼容接口）。Kimi 标 P2 待验证；本轮用兼容面 stub + 官方文档把它升为已确认。
+- **状态**：已确认（本地 OpenAI 兼容 stub + 官方文档；**未请求真实 Google API**）
+- **定位**：`config/model-selection/google.json` 全部 `match` 为 `models/gemini-…`；发现过滤 `ModelCatalogService.cs:49-53` + `FindModelSelectionEntry` 子串方向为 discovered.Contains(match)。
+- **函数/符号**：`FindModelSelectionEntry` / `ResolveRoute` / `ReplaceModelInRequestBody`
+- **预期与实际**：官方 OpenAI 兼容示例模型 id 为 `gemini-3.8-flash`（无 `models/` 前缀），`base_url=https://generativelanguage.googleapis.com/v1beta/openai/`。stub 的 `GET` 返回 `gemini-2.5-flash` 时，catalog 不含任何 google 模型；显式 `models/gemini-2.5-flash@google` 仍把带前缀的 id 发给 `POST /v1beta/openai/chat/completions`。
+- **触发条件**：启用 google provider。
+- **影响**：列表空白；聊天用 tags 名则上游 404（按社区/官方裸 id 惯例）。
+- **根因**：把原生 Gemini `models/` 资源名写进了 OpenAI 兼容 match。
+- **证据**：health `providers` 含 `google`，`available_models` 无 gemini；`/v1/models` 无 google 条目；stub body `"model":"models/gemini-2.5-flash"`。文档：https://ai.google.dev/gemini-api/docs/openai
+- **对应**：**KIMI-015**（本轮建议从「待验证」改为「已确认」，仍缺真实 Google 目录字节级对照）。
+- **修复方向**：match 改为裸 id，或发现/转发时剥离 `models/`。
+- **回归验证**：stub `/v1beta/openai/models` 返回裸 id，断言 catalog 收录且上游 model 为裸 id。
+
+#### GROK-008 `NormalizeBaseUrl` 只折叠 ChatPath 首段，粘贴 Google 官方 base_url 会路径翻倍
+
+- **类型**：功能
+- **严重程度**：**P2**。默认不设 `PROVIDER_GOOGLE_BASE_URL` 时正确；按官方 SDK 文档设置则会 404。
+- **状态**：已确认（`System.Uri` 拼接复现，与 HttpClient 行为一致）
+- **定位**：`Services/ProviderRegistry.cs:293-307`；`ProviderCapabilitiesRegistry.cs:68` `v1beta/openai/chat/completions`
+- **函数/符号**：`NormalizeBaseUrl`
+- **预期与实际**：官方 `https://generativelanguage.googleapis.com/v1beta/openai/` + ChatPath → 重复 `/v1beta/openai/v1beta/openai/chat/completions`。默认根 URL 拼接结果正确。
+- **触发条件**：用户把 Google OpenAI 兼容 `base_url` 整段写入 `PROVIDER_GOOGLE_BASE_URL`。
+- **影响**：google provider 目录与聊天均 404。
+- **根因**：只判断 base 是否以 `/{firstSegment}` 结尾（`v1beta`），不能折叠双段前缀。
+- **证据**：`official=https://generativelanguage.googleapis.com/v1beta/openai/v1beta/openai/chat/completions` vs `default=https://generativelanguage.googleapis.com/v1beta/openai/chat/completions`。
+- **对应**：**KIMI-009**。
+- **修复方向**：按 ChatPath 最长前缀做后缀折叠。
+- **回归验证**：google 双段 + kimicode 单段 `/v1` 都不回归。
+
+#### GROK-009 `.env` 无条件覆盖进程环境变量，与文档优先级相反
+
+- **类型**：配置 / 运维安全
+- **严重程度**：**P2**
+- **状态**：已确认（独立复现）
+- **定位**：`Program.cs:21-23` `Environment.SetEnvironmentVariable(key, value)` 无「已存在则跳过」。
+- **函数/符号**：启动 .env 加载循环
+- **预期与实际**：`docs/CONFIGURATION.md` 把系统环境写在 `.env` 之前（Kimi 引用的 `CLAUDE.md` 优先级在 `65a6b72` 后已随文件删除，但 CONFIGURATION/DEPLOYMENT 仍在）。实际 CWD `.env` 覆盖 `PROXY_PORT`。
+- **触发条件**：同时存在系统环境与 `.env`。
+- **影响**：容器/CI 注入的端口、密钥被仓库遗留 `.env` 静默压过。
+- **根因**：加载器不做「empty-only」写入。
+- **证据**：进程 `PROXY_PORT=18348` + `.env` `PROXY_PORT=18499` → 监听 18499，`listen18348=False`。
+- **对应**：**KIMI-008**。
+- **修复方向**：仅当 `GetEnvironmentVariable` 为空时写入，或改文档并醒目说明。
+- **回归验证**：系统值优先的启动测试。
+
+#### GROK-010 本地 Ollama 与 Ollama Cloud 同名注册，`@ollama` 只能打到先注册者
+
+- **类型**：路由
+- **严重程度**：**P2**（Kimi 放在 KIMI-023 的 P3 元数据里；双实例时路由语义错误，建议按 P2）
+- **状态**：已确认（独立复现）
+- **定位**：`Services/ProviderRegistry.cs:257-271` 追加第二个 `Name="ollama"`；`FindConfiguredProvider` `:169-176` 返回第一个。
+- **函数/符号**：`DiscoverProviders` / `FindConfiguredProvider`
+- **预期与实际**：云与本地应可区分；实际 `health.providers` 出现 `["google","ollama","ollama"]`，`model@ollama` 固定命中列表首个。
+- **触发条件**：同时设置 `PROVIDER_OLLAMACLOUD_API_KEY` 与指向 localhost 的 `PROVIDER_OLLAMA_BASE_URL`，且两者 BaseUrl 字符串不完全相等（本轮 cloud=`127.0.0.1`、local=`localhost`）。
+- **影响**：限定路由无法选择本地或云；failover 列表含两个同名 provider。
+- **根因**：能力表只有一个 `ollama` 名，本地作为第二实例硬编码塞入。
+- **证据**：health JSON `providers:["google","ollama","ollama"]`。
+- **对应**：**KIMI-023** 第 4 点。
+- **修复方向**：拆成 `ollama` / `ollama-local`（或类似）并修正 Find 与 tags 前缀。
+- **回归验证**：双 URL 时 `@ollama` 与 `@ollama-local` 分别打到对应 BaseUrl。
+
+### 待验证风险
+
+#### GROK-011 `ollama.json` 宽泛 `mistral` 子串可能重新纳入 cloud 已禁用模型
+
+- **类型**：配置
+- **严重程度**：**P3**
+- **状态**：待验证（匹配器逻辑已确认；取决于真实/stub 目录是否返回被禁 id）
+- **定位**：`config/model-selection/ollama.json:22` `match:mistral` enabled；`ollamacloud.json` 中 `mistral-large-3:675b` enabled:false；`FindModelSelectionEntry` 禁用条目不参与但宽条目仍命中。
+- **对应**：**KIMI-017**。本轮未向 stub 注入 `mistral-large-3:675b`。
+- **修复方向**：精确禁用否决子串，或收窄 match。
+
+#### GROK-012 `BuildOllamaChatRequest` 将 `role:tool` 改写为 `assistant`
+
+- **类型**：功能
+- **严重程度**：**P2**
+- **状态**：待验证（改写事实已确认；真实 Ollama 上游是否拒绝原 tool 角色未测）
+- **定位**：`Endpoints/OpenAiEndpoints.cs:603-610`
+- **对应**：**KIMI-016**。注释理由与「该函数只用于 Ollama-format 上游」矛盾。
+- **修复方向**：保留 tool 角色或按 Ollama 字段映射，不要无条件改写。
+
+### 工程改进建议
+
+下列与 Kimi P3 项同根因，不重复计为独立缺陷，仅记录独立核对结果：
+
+- 启动前串行 `RefreshAvailableModels` + `HttpClient.Timeout=5min` + `CancellationToken.None`（KIMI-006）：代码确认，本轮未做 10s 慢目录计时。
+- 空 catalog 不更新 `ModelsLastRefreshUtc`（KIMI-007）：代码确认，本轮未做三次 `/api/tags` 计数。
+- `ReasoningCacheService` 无 TTL/容量（KIMI-010）：代码确认，未做长跑内存。
+- `/v1` 流式在 `HasStarted==false` 时也不 failover（KIMI-011）：代码确认；同函数失败时能改写 502，说明「headers already sent」理由不成立。
+- `/v1` 的 `TryHandleOllamaCloudChatCompletion` 无传输 catch（KIMI-012）：代码确认。
+- `/api/chat` Ollama 直通跳过 `ApplyExecutionDefaults`（KIMI-013）：代码确认。
+- 默认 `0.0.0.0` 且无 `PROXY_API_KEY`（KIMI-014）：代码确认。对本产品「局域网 VS 连代理」可能是有意设计，但与 README「local endpoint」及缺认证叠加后风险成立。
+- `/api/chat` 省略 `stream` 默认为 false（KIMI-018）：代码确认；VS BYOM 是否总带 `stream` 未测。
+- 认证非常量比较、`MaskApiKey` 日志片段、`/health` 无豁免（KIMI-019）：代码确认。
+- 双目录配置遮蔽、JSON 静默失败、`/v1/models` fire-and-forget（KIMI-020）：代码确认。
+- 文档错误码/诊断头与代码不符（KIMI-021）：`docs/API.md:302-313`、`README.md:698-705` 仍在。原 `CLAUDE.md` 条目因 `65a6b72` 删除文件而失效。
+- Dockerfile nightly preview、CI 只监听 `main`、benchmark 文件只增不删（KIMI-022）：代码确认。当前分支策略写「不要碰 main」，CI 却只跑 main。
+- tags 假 digest、capabilities 恒含 tools、Ollama 伪 SSE 两个 chunk 不同 id（KIMI-023 1–3）：代码确认。
+
+### 验证记录
+
+```
+dotnet test tests/ProxyTests/ProxyTests.csproj -c Debug
+# 已通过! 失败: 0，通过: 469，已跳过: 0
+```
+
+独立 stub 复现（`C:\Users\jingm\AppData\Local\Temp\grok-audit-repro\results.txt`、`proxy.log`、`dual-ollama.txt`）：
+
+| 场景 | 结果 |
+|---|---|
+| zhipu `/api/chat` 非流式 | 上游 `POST /v4/chat/completions` |
+| zhipu `/api/chat` 流式 | 上游 `POST /v1/chat/completions` |
+| zhipu `/v1` 流式 | 上游 `POST /v4/chat/completions` |
+| `k3@kimicode` temperature=0.2 | 上游原样 0.2/0.1 |
+| `models/gemini-2.5-flash@google` | 上游 model 带 `models/` 前缀；catalog 无 google 模型 |
+| `messages:"x"` | `/v1` HTTP 500，`EnumerateArray` |
+| moonshot 死端口 | `/api/chat` 500 空 body；`/v1` 502 JSON |
+| tool_calls 无 content | `/api/chat` HTTP 500 |
+| Google 官方 base_url 拼接 | 路径双段重复 |
+| `.env` vs 进程 `PROXY_PORT` | 监听 .env 的 18499 |
+| 双 ollama URL | `providers:["google","ollama","ollama"]` |
+
+未重复执行：Kimi 的推理缓存双会话注入、10s 慢启动计时、空目录三次刷新计数、真实 Google/Ollama Cloud。
+
+### 未覆盖部分
+
+- 真实 17 家上游的现网目录与参数拒绝矩阵。
+- `scripts/` 压测在真实密钥下的行为。
+- Docker 镜像构建与 nightly 标签是否已失效。
+- `README.zh-CN.md` 全文。
+- 流式中途断连后客户端重试语义。
+- 多候选裸模型的流式 failover（静态确认，未起双 stub）。
+
+---
+
+## Grok 对 Kimi 的交叉复核
+
+复核对象：上文「Kimi Code 独立审计」KIMI-001 … KIMI-023。代码基线相对 Kimi 的 `f3741c0`+脏树：路由修复已在 `132c89f`，与 Kimi 当时所审内容一致；`65a6b72` 仅删除 `CLAUDE.md`，不修复下列缺陷。
+
+| 编号 | 复核结论 | 证据与建议修正 |
+|---|---|---|
+| KIMI-001 | **确认** | 独立 stub：`/api/chat` 流式打 `/v1/chat/completions`，非流式与 `/v1` 流式打 `/v4`。对应 GROK-001。 |
+| KIMI-002 | **确认** | 读写键代码与单测键空间对不上。本轮未重跑双会话 harness，但不构成反证。对应 GROK-004。 |
+| KIMI-003 | **确认** | 死端口：`/api/chat` 500 空 body（堆栈 `OllamaEndpoints.cs:331`），`/v1` 502 JSON。对应 GROK-003。Kimi 用挂起+短 timeout，本轮用连接拒绝，同根因。 |
+| KIMI-004 | **确认** | tool_calls-only stub → `/api/chat` 500。对应 GROK-006。 |
+| KIMI-005 | **确认** | `messages` 为字符串 → 500，堆栈与 Kimi 一致。对应 GROK-005。 |
+| KIMI-006 | **确认**（本轮未复计时） | `Program.cs:50` 在 `Run()` 前 await 串行发现 + 5min HttpClient 超时 + `CancellationToken.None` 静态闭合。接受 Kimi 的 11s 计时。 |
+| KIMI-007 | **确认**（本轮未数探测次数） | `:76-79` 空结果不写 `ModelsLastRefreshUtc`，节流失效。逻辑充分。 |
+| KIMI-008 | **确认** | 独立复现监听 18499 而非进程 18348。对应 GROK-009。行尾注释问题本轮未测，属附属，不否决主结论。 |
+| KIMI-009 | **确认** | `Uri` 拼接得到双段路径。对应 GROK-008。默认 Base URL 不受影响，严重程度 P2 合适。 |
+| KIMI-010 | **确认** | 全类无 Remove/TTL。与 KIMI-002 叠加放大串话窗口。未做内存实测，同意静态即可成立。 |
+| KIMI-011 | **确认** | 流式只取 `candidates[0]`；失败分支能改 502，证明此时可 failover。本轮未起双候选 stub。 |
+| KIMI-012 | **确认** | `TryHandleOllamaCloudChatCompletion` `:431` 无 catch，会打断非流式 failover。与 KIMI-003 同类，但是 `/v1` 面，**不是重复编号**：调用点不同。 |
+| KIMI-013 | **确认** | Ollama 直通只 `ReplaceModelInOllamaRequestBody`，不调 `ApplyExecutionDefaults`。timeout 仍生效。未抓 Ollama options 对照，静态足够。 |
+| KIMI-014 | **部分成立** | 绑定 `0.0.0.0` 且默认无认证属实（本轮代理日志 `Now listening on: http://0.0.0.0:18772`）。严重程度取决于产品意图：局域网 VS/Copilot 需要非 loopback。建议修正为「默认全接口 + 无认证」的**文档/加固缺口**，不一定改为默认 127.0.0.1（那会打断常见用法）。P2 在「无 PROXY_API_KEY 的共享网络」下成立。 |
+| KIMI-015 | **确认**（升级） | Kimi 标待验证。本轮 OpenAI 兼容 stub 返回裸 `gemini-2.5-flash` 时 catalog 无 google 模型；显式带前缀请求把 `models/gemini-2.5-flash` 发给 `/v1beta/openai/chat/completions`。官方文档用裸 id。仍缺真实 Google `GET /v1beta/openai/models` 字节，但「待验证」过保守。对应 GROK-007。建议状态改为已确认，保留「真实目录未拉取」备注。 |
+| KIMI-016 | **待验证** | 同意：改写代码属实、注释方向错误。上游是否必须保留 tool 角色需 Ollama 实锤。维持待验证。对应 GROK-012。 |
+| KIMI-017 | **待验证** | 匹配器+合并逻辑同意。本轮 stub 未返回被禁 mistral id。维持待验证。对应 GROK-011。 |
+| KIMI-018 | **部分成立** | 省略 `stream` → false 代码属实。原生 Ollama 默认 true。对 VS BYOM（通常显式传 stream）影响可能为 0。建议保持 P3，并在文档写明代理默认。 |
+| KIMI-019 | **确认** | MaskApiKey / `==` 比较 / health 需认证均在代码中。P3 合适。 |
+| KIMI-020 | **确认** | 双目录、吞 JSON 错、enabled 仅认 JSON false、`/v1/models` fire-and-forget 均在。Kimi 排除「fire-and-forget 造成数据错误」同意。 |
+| KIMI-021 | **部分成立** | 条目 1（API.md 虚构错误码）、2（README/ARCHITECTURE 诊断头）在当前树仍成立。条目 3、4 所引 `CLAUDE.md` 已在 `65a6b72` 删除，**不再作为现存文档缺陷**；参数过滤未实现仍是代码事实，应改记为「实现与历史文档/CLAUDE 描述不一致，文件已删」。 |
+| KIMI-022 | **确认** | Dockerfile nightly、CI 只 `main`、benchmark 文件无界。未 docker build。 |
+| KIMI-023 | **部分成立** | 1–3（capabilities/假 digest/伪 SSE id）确认、P3 合适。第 4 点双 ollama **确认且本轮复现**，建议从本条拆出或升为 P2（见 GROK-010），不宜只当元数据。 |
+
+**全覆盖检查**：KIMI-001 至 KIMI-023 均有复核结论，无遗漏。
+
+**复核分歧摘要**：
+
+1. **KIMI-015**：建议「待验证」→「已确认」（本地兼容面 stub + 官方文档；真实 Google 目录仍未拉取）。
+2. **KIMI-014**：问题存在，但是否应改默认 bind 需产品决策；不宜当成无条件 bug。
+3. **KIMI-021**：`CLAUDE.md` 相关子项因基线变化失效。
+4. **KIMI-023.4**：同根因应升为独立 P2 路由缺陷（GROK-010）。
+5. **Kimi 未单列**：GROK-002 kimicode 固定采样参数缺失——这是当前树里与「kimi 编程套餐异常」最直接的 P1。
+
+**不成立的 Kimi 条目**：无。没有发现需要整条推翻的结论。
+
+**重复关系**（同根因不重复计缺陷）：GROK-001=KIMI-001，GROK-003=KIMI-003，GROK-004=KIMI-002，GROK-005=KIMI-005，GROK-006=KIMI-004，GROK-007=KIMI-015，GROK-008=KIMI-009，GROK-009=KIMI-008，GROK-010=KIMI-023.4。GROK-002 为独立新发现。
