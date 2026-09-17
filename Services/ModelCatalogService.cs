@@ -64,7 +64,12 @@ internal sealed class ModelCatalogService
                         list = [];
                         claimsByUpstream[m] = list;
                     }
-                    list.Add(new Claimant(prov, m, prio, NormalizeDisplayName(selection.Value.DisplayName)));
+                    // Substring selection may admit dated variants, but a configured
+                    // display name identifies its exact model, not the first variant
+                    // returned by discovery. Otherwise /api/tags changes identity.
+                    string? displayName = string.Equals(selection.Value.Match, m, StringComparison.OrdinalIgnoreCase)
+                        ? NormalizeDisplayName(selection.Value.DisplayName) : null;
+                    list.Add(new Claimant(prov, m, prio, displayName));
                 }
             }
 
@@ -303,6 +308,352 @@ internal sealed class ModelCatalogService
 
     private string ResolveConfigModel(string model) =>
         _providerRegistry.ModelToUpstream.TryGetValue(model, out string? upstream) ? upstream : model;
+
+    /// <summary>
+    /// The single, shared model-identity resolver used by every endpoint
+    /// (/v1/chat/completions, /api/chat, /api/show). It normalizes every alias form
+    /// this proxy itself can emit — plus the OpenAI/Ollama idioms clients use — into
+    /// a canonical (model, provider) identity:
+    ///
+    ///   - "model@provider"        → STRICT: only that provider is consulted. Unknown
+    ///     provider or model yields a <see cref="RouteErrorKind"/> error and never
+    ///     falls back to another provider or to the default model.
+    ///   - "PROVIDER - model"      → the display alias emitted as "name" by /api/tags
+    ///     (e.g. "KIMICODE - k3:latest"). Also STRICT — it carries explicit provider
+    ///     information, so it must round-trip to that exact provider.
+    ///   - "provider/model"        → strict when the prefix names a configured
+    ///     provider; otherwise the slash is part of the model id (OpenRouter/NVIDIA
+    ///     upstream ids like "openai/gpt-oss-120b").
+    ///   - "model"                 → automatic routing: discovered catalog first, then
+    ///     config-declared exact matches, then config display names, and only then the
+    ///     default model (flagged via <see cref="ResolvedRoute.FallbackUsed"/>).
+    ///
+    /// Ollama ":latest" suffixes are stripped from the model and from the provider hint,
+    /// but only as a fallback tier — upstream ids that legitimately contain ':'
+    /// (OpenRouter ":free" / ":batch") are tried verbatim first.
+    /// </summary>
+    internal ResolvedRoute ResolveRoute(string? requestedModel)
+    {
+        bool isDefaultRequest = string.IsNullOrWhiteSpace(requestedModel);
+        string requested = isDefaultRequest ? _providerRegistry.DefaultModel : requestedModel!.Trim();
+
+        // A registered literal ID wins over compatibility syntax, including '@'
+        // and vendor prefixes that happen to be configured provider names.
+        bool IsLiteralId(string id) =>
+            (_providerRegistry.ModelToProvider.ContainsKey(id)
+                && (!_providerRegistry.ModelToUpstream.TryGetValue(id, out string? upstreamId)
+                    || string.Equals(id, upstreamId, StringComparison.OrdinalIgnoreCase)))
+            || ConfigExactClaims(id) is not null;
+        bool literalModel = IsLiteralId(requested) || IsLiteralId(ProviderRegistry.StripTagSuffix(requested));
+
+        string modelPart = requested;
+        string? providerHint = null;
+        int at = requested.LastIndexOf('@');
+        bool qualifiedLiteral = at > 0 && IsLiteralId(requested[..at]);
+        // Parse our display prefix first, so '@' inside a model/display name is
+        // preserved. Unknown display providers remain strict instead of defaulting.
+        int displaySeparator = requested.IndexOf(" - ", StringComparison.Ordinal);
+        if (!literalModel && !qualifiedLiteral && displaySeparator > 0)
+        {
+            providerHint = requested[..displaySeparator];
+            modelPart = requested[(displaySeparator + 3)..];
+        }
+        if (!literalModel && providerHint is null && at > 0 && at < requested.Length - 1)
+        {
+            string hintCandidate = ProviderRegistry.StripTagSuffix(requested[(at + 1)..].Trim());
+            if (hintCandidate.Length > 0)
+            {
+                modelPart = requested[..at];
+                providerHint = hintCandidate;
+            }
+        }
+
+        // ── 3. OpenAI-style "provider/model" prefix ──────────────────────
+        // Treated as a hint only when the prefix names a CONFIGURED provider;
+        // otherwise the slash belongs to the model id itself.
+        string? slashRest = null;
+        if (!literalModel && providerHint is null)
+        {
+            int slash = modelPart.IndexOf('/');
+            if (slash > 0 && slash < modelPart.Length - 1)
+            {
+                string prefix = modelPart[..slash];
+                if (_providerRegistry.FindConfiguredProvider(prefix) is not null)
+                {
+                    providerHint = prefix;
+                    slashRest = modelPart[(slash + 1)..];
+                }
+            }
+        }
+
+        // Model-id tiers, most literal first: upstream ids may legitimately contain
+        // ':' (OpenRouter ":free"/":batch"). Only one terminal ':latest' is
+        // compatibility syntax; literal IDs are tested before the stripped tier.
+        modelPart = modelPart.Trim();
+        List<string> modelTiers = [];
+        if (modelPart.Length > 0)
+        {
+            modelTiers.Add(modelPart);
+        }
+
+        string lastTagStripped = ProviderRegistry.StripTagSuffix(modelPart);
+        if (lastTagStripped.Length > 0 && !modelTiers.Contains(lastTagStripped, StringComparer.OrdinalIgnoreCase))
+        {
+            modelTiers.Add(lastTagStripped);
+        }
+
+        if (modelTiers.Count == 0)
+        {
+            modelTiers.Add(_providerRegistry.DefaultModel);
+        }
+
+        // ── 4. Strict provider routing ───────────────────────────────────
+        if (providerHint is not null)
+        {
+            ProviderInfo? pinned = _providerRegistry.FindConfiguredProvider(providerHint);
+            if (pinned is null)
+            {
+                return new ResolvedRoute(requested, modelTiers[0], providerHint, modelTiers[0], [], false,
+                    RouteErrorKind.ProviderNotFound,
+                    $"Provider '{providerHint}' is not configured. Configured providers: {string.Join(", ", _providerRegistry.Providers.Select(p => p.Name))}.");
+            }
+
+            ProviderInfo provider = pinned.Value;
+            (string Canonical, string Upstream)? match = ResolveWithinProvider(provider, modelTiers, slashRest);
+            if (match is null)
+            {
+                return new ResolvedRoute(requested, modelTiers[0], provider.Name, modelTiers[0], [], false,
+                    RouteErrorKind.ModelNotFound,
+                    $"Model '{modelTiers[0]}' is not available from provider '{provider.Name}'.");
+            }
+
+            return new ResolvedRoute(requested, match.Value.Canonical, provider.Name, match.Value.Canonical,
+                [(provider, match.Value.Upstream)], false, RouteErrorKind.None, null);
+        }
+
+        // Check catalog and configuration at each literal tier before considering
+        // ':latest' removal. Discovery may be incomplete while config is valid.
+        foreach (string tier in modelTiers)
+        {
+            if (_providerRegistry.ModelToProvider.ContainsKey(tier))
+            {
+                string canonical = _providerRegistry.ModelToUpstream.TryGetValue(tier, out string? up) ? up : tier;
+                return new ResolvedRoute(requested, canonical, null, canonical,
+                    _providerRegistry.ResolveCandidates(tier), false, RouteErrorKind.None, null);
+            }
+            (ProviderInfo Provider, string UpstreamModel)[]? claims = ConfigExactClaims(tier);
+            if (claims is not null)
+            {
+                return new ResolvedRoute(requested, claims[0].UpstreamModel, null, claims[0].UpstreamModel,
+                    claims, false, RouteErrorKind.None, null);
+            }
+        }
+
+        // ── 5c. Bare model, config display-name match ────────────────────
+        // Custom display names emitted by /api/tags (e.g. "Qwen3.7 Max:latest")
+        // round-trip to their canonical configured model.
+        foreach (string tier in modelTiers)
+        {
+            List<(ProviderInfo Provider, ModelSelectionEntry Entry)> displayClaims = [];
+            foreach (ProviderInfo prov in _providerRegistry.Providers)
+            {
+                ModelSelectionEntry? entry = _modelSelectionStore.FindExactDisplayNameEntry(tier, prov.Name);
+                if (entry.HasValue)
+                {
+                    displayClaims.Add((prov, entry.Value));
+                }
+            }
+
+            if (displayClaims.Count > 0)
+            {
+                (ProviderInfo Provider, string UpstreamModel)[] ordered = displayClaims
+                    .OrderBy(c => c.Entry.Priority)
+                    .ThenBy(c => ConfiguredProviderOrder(c.Provider.Name))
+                    .Select(c => (c.Provider, c.Entry.Match))
+                    .ToArray();
+                return new ResolvedRoute(requested, ordered[0].UpstreamModel, null, ordered[0].UpstreamModel,
+                    ordered, false, RouteErrorKind.None, null);
+            }
+        }
+
+        // ── 5d. Unknown bare model → configured default (flagged) ────────
+        // Legacy behaviour for BYOM clients that send arbitrary ids. NormalizedModel
+        // keeps the unresolved request id; the fallback is a separate, visible step.
+        string fallback = _providerRegistry.DefaultModel;
+        return new ResolvedRoute(requested, modelTiers[0], null, fallback,
+            _providerRegistry.ResolveCandidates(fallback), !isDefaultRequest, RouteErrorKind.None, null);
+    }
+
+    /// <summary>
+    /// Providers whose config declares an exact match for <paramref name="model"/>,
+    /// ordered by (priority, configured provider order). Null when none claim it.
+    /// </summary>
+    private (ProviderInfo Provider, string UpstreamModel)[]? ConfigExactClaims(string model)
+    {
+        List<(ProviderInfo Provider, ModelSelectionEntry Entry)> claims = [];
+        foreach (ProviderInfo prov in _providerRegistry.Providers)
+        {
+            ModelSelectionEntry? entry = _modelSelectionStore.FindExactModelSelectionEntry(model, prov.Name);
+            if (entry.HasValue)
+            {
+                claims.Add((prov, entry.Value));
+            }
+        }
+
+        if (claims.Count == 0)
+        {
+            return null;
+        }
+
+        return claims
+            .OrderBy(c => c.Entry.Priority)
+            .ThenBy(c => ConfiguredProviderOrder(c.Provider.Name))
+            .Select(c => (c.Provider, c.Entry.Match))
+            .ToArray();
+    }
+
+    /// <summary>
+    /// Resolves the upstream model id for <paramref name="modelPart"/> within one
+    /// specific provider. Order of evidence: catalog-qualified alias → bare/display
+    /// alias owned by this provider → discovered upstream id owned by this provider →
+    /// NVIDIA-style last-slash-segment suffix match → config-declared exact match.
+    /// Returns null when the provider cannot serve the model.
+    /// </summary>
+    private (string Canonical, string Upstream)? ResolveWithinProvider(
+        ProviderInfo provider,
+        IReadOnlyList<string> modelTiers,
+        string? slashRest)
+    {
+        List<string> ids = [.. modelTiers];
+        if (!string.IsNullOrEmpty(slashRest))
+        {
+            if (!ids.Contains(slashRest, StringComparer.OrdinalIgnoreCase))
+            {
+                ids.Add(slashRest);
+            }
+
+            string restStripped = ProviderRegistry.StripTagSuffix(slashRest);
+            if (!ids.Contains(restStripped, StringComparer.OrdinalIgnoreCase))
+            {
+                ids.Add(restStripped);
+            }
+
+        }
+
+        foreach (string id in ids)
+        {
+            // Qualified alias registered by catalog discovery ("upstream@provider").
+            string qualified = $"{id}@{provider.Name}";
+            if (_providerRegistry.ModelToUpstream.TryGetValue(qualified, out string? qualifiedUpstream))
+            {
+                return (qualifiedUpstream, qualifiedUpstream);
+            }
+
+            // Bare/display alias owned by this provider.
+            if (_providerRegistry.ModelToProvider.TryGetValue(id, out ProviderInfo owner)
+                && string.Equals(owner.Name, provider.Name, StringComparison.OrdinalIgnoreCase))
+            {
+                string canonical = _providerRegistry.ModelToUpstream.TryGetValue(id, out string? bareUpstream) ? bareUpstream : id;
+                return (canonical, canonical);
+            }
+
+            // Discovered upstream id claimed by this provider even when another
+            // provider won the bare name.
+            foreach (KeyValuePair<string, ProviderInfo> kv in _providerRegistry.ModelToProvider)
+            {
+                if (!string.Equals(kv.Value.Name, provider.Name, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                string up = _providerRegistry.ModelToUpstream.TryGetValue(kv.Key, out string? u) ? u : kv.Key;
+                if (string.Equals(up, id, StringComparison.OrdinalIgnoreCase))
+                {
+                    return (id, up);
+                }
+            }
+
+            ModelSelectionEntry? exact = _modelSelectionStore.FindExactModelSelectionEntry(id, provider.Name);
+            if (exact.HasValue)
+            {
+                return (exact.Value.Match, exact.Value.Match);
+            }
+        }
+
+        // NVIDIA-style suffix: "qwen3.5-397b-a17b" → upstream "qwen/qwen3.5-397b-a17b".
+        foreach (string id in ids)
+        {
+            if (id.Contains('/')) continue;
+            string wanted = LastSlashSegment(id);
+            foreach (KeyValuePair<string, ProviderInfo> kv in _providerRegistry.ModelToProvider)
+            {
+                if (!string.Equals(kv.Value.Name, provider.Name, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                string up = _providerRegistry.ModelToUpstream.TryGetValue(kv.Key, out string? u) ? u : kv.Key;
+                if (string.Equals(LastSlashSegment(up), wanted, StringComparison.OrdinalIgnoreCase))
+                {
+                    return (up, up);
+                }
+            }
+        }
+
+        // Config-declared exact match (covers providers whose /models discovery failed).
+        // Returns the configured match string so the upstream id keeps its canonical casing.
+        foreach (string id in ids)
+        {
+            ModelSelectionEntry? entry = _modelSelectionStore.FindExactModelSelectionEntry(id, provider.Name);
+            if (entry.HasValue)
+            {
+                return (entry.Value.Match, entry.Value.Match);
+            }
+        }
+
+        // Config-declared suffix match: /api/tags strips the vendor prefix from
+        // display names, so "CUSTOMOPENAI - muse-spark-1.1" must find the configured
+        // match "meta/muse-spark-1.1".
+        foreach (string id in ids)
+        {
+            ModelSelectionEntry? entry = _modelSelectionStore.FindSuffixModelSelectionEntry(id, provider.Name);
+            if (entry.HasValue)
+            {
+                return (entry.Value.Match, entry.Value.Match);
+            }
+        }
+
+        // Config-declared display name (covers custom /api/tags names like "Qwen3.7 Max").
+        foreach (string id in ids)
+        {
+            ModelSelectionEntry? entry = _modelSelectionStore.FindExactDisplayNameEntry(id, provider.Name);
+            if (entry.HasValue)
+            {
+                return (entry.Value.Match, entry.Value.Match);
+            }
+        }
+
+        return null;
+    }
+
+    private int ConfiguredProviderOrder(string providerName)
+    {
+        for (int i = 0; i < _providerRegistry.Providers.Count; i++)
+        {
+            if (string.Equals(_providerRegistry.Providers[i].Name, providerName, StringComparison.OrdinalIgnoreCase))
+            {
+                return i;
+            }
+        }
+
+        return int.MaxValue;
+    }
+
+    private static string LastSlashSegment(string id)
+    {
+        int slash = id.LastIndexOf('/');
+        return slash >= 0 && slash < id.Length - 1 ? id[(slash + 1)..] : id;
+    }
 
     /// <summary>
     /// Ensures the configured default model (from DEEPSEEK_MODEL env var) is always in

@@ -239,30 +239,30 @@ public class ModelCatalogServiceTests : IDisposable
     public async Task Zhipu_OnlyProvider_ClaimsBareName()
     {
         (ModelCatalogService catalog, ProviderRegistry registry, _) =
-            BuildCatalog(new Dictionary<string, string[]> { ["zhipu"] = ["glm-5.2"] });
+            BuildCatalog(new Dictionary<string, string[]> { ["zhipu"] = ["glm-5.3"] });
 
         await catalog.RefreshAvailableModels(CancellationToken.None);
 
-        Assert.Equal("zhipu", registry.ResolveProvider("glm-5.2").Name);
-        Assert.Equal("zhipu", registry.ModelToProvider["glm-5.2"].Name);
-        Assert.Equal("zhipu", registry.ModelToProvider["glm-5.2@zhipu"].Name);
-        Assert.Contains("glm-5.2", catalog.AvailableModels);
+        Assert.Equal("zhipu", registry.ResolveProvider("glm-5.3").Name);
+        Assert.Equal("zhipu", registry.ModelToProvider["glm-5.3"].Name);
+        Assert.Equal("zhipu", registry.ModelToProvider["glm-5.3@zhipu"].Name);
+        Assert.Contains("glm-5.3", catalog.AvailableModels);
     }
 
     [Fact]
     public async Task Zhipu_DisplayName_ResolvesToUpstreamModel()
     {
         (ModelCatalogService catalog, ProviderRegistry registry, _) =
-            BuildCatalog(new Dictionary<string, string[]> { ["zhipu"] = ["glm-5.2"] });
+            BuildCatalog(new Dictionary<string, string[]> { ["zhipu"] = ["glm-5.3"] });
 
         await catalog.RefreshAvailableModels(CancellationToken.None);
 
-        Assert.Contains("GLM 5.2", catalog.AvailableModels);
-        Assert.Equal("zhipu", registry.ResolveProvider("GLM 5.2").Name);
-        Assert.Equal("glm-5.2", registry.ResolveUpstreamModel("GLM 5.2"));
-        Assert.Equal("glm-5.2", registry.ResolveUpstreamModel("GLM 5.2:latest"));
-        Assert.Equal("glm-5.2", registry.ResolveUpstreamModel("GLM 5.2@zhipu"));
-        Assert.Equal(1_000_000, catalog.GetExecutionConfigForModel("GLM 5.2").ContextLength);
+        Assert.Contains("glm-5.3", catalog.AvailableModels);
+        Assert.Equal("zhipu", registry.ResolveProvider("glm-5.3").Name);
+        Assert.Equal("glm-5.3", registry.ResolveUpstreamModel("glm-5.3"));
+        Assert.Equal("glm-5.3", registry.ResolveUpstreamModel("glm-5.3:latest"));
+        Assert.Equal("glm-5.3", registry.ResolveUpstreamModel("glm-5.3@zhipu"));
+        Assert.Equal(128_000, catalog.GetExecutionConfigForModel("glm-5.3").ContextLength);
     }
 
     [Fact]

@@ -58,10 +58,14 @@ Every service is registered as a **singleton** in `Program.cs`. The entire DI gr
 ```
 ProviderHttpClientFactory  →  Creates/caches per-provider HttpClient with auth headers
 ProviderRegistry           →  Resolves model name → ordered list of provider candidates;
-                              ResolveModel() does 3-level "provider/model" hint resolution
-ModelSelectionStore        →  Loads/parses config/model-selection/*.json (incl. override_client_params)
+                              ResolveModel() does 3-level "provider/model" hint resolution;
+                              NormalizeBaseUrl() collapses duplicated "/v1"-style version segments
 ModelCatalogService        →  Fetches live model catalogs from all providers on startup;
-                              resolves cross-provider collisions by (priority asc, provider order asc)
+                              resolves cross-provider collisions by (priority asc, provider order asc);
+                              ResolveRoute() is the central router: strict "model@provider" semantics
+                              (404, never a silent fallback), catalog → config-exact → default chain
+                              for bare models
+ModelSelectionStore        →  Loads/parses config/model-selection/*.json (incl. override_client_params)
 ReasoningCacheService      →  Caches DeepSeek reasoning_content for multi-turn conversations
 RequestTransformer         →  Injects defaults + filters unsupported params per provider;
                               honours override_client_params=true force-mode
@@ -173,7 +177,7 @@ Tests use `WebApplicationFactory<Program>` with an **in-process stub provider** 
 
 - `ProxyFixture` provides `HttpClient` wired to the in-process proxy
 - Tests that mutate process env vars MUST share the `[Collection("Proxy")]` fixture (no parallel races)
-- **336 tests** across 14 test files covering endpoints, parameter validation, model selection, transformers, auth, reasoning cache, Ollama response building, JSON defaults, HTTP client factory, provider registry, **override_client_params semantics**, and **3-level `provider/model` hint resolution**
+- **436 tests** across 16 test files covering endpoints, parameter validation, model selection, transformers, auth, reasoning cache, Ollama response building, JSON defaults, HTTP client factory, provider registry, **override_client_params semantics**, **3-level `provider/model` hint resolution**, **strict `model@provider` routing** (incl. 404 without fallback for unknown provider/model, and 400 for invalid JSON), and **alias round-trip** (`PROVIDER - model:latest` display names, tags, display_name forms emitted by `/api/tags` all parse back without fallback)
 
 ## Credential Separation
 

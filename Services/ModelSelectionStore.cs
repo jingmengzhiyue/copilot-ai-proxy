@@ -75,8 +75,7 @@ internal sealed class ModelSelectionStore
     {
         string m = model.ToLowerInvariant();
 
-        if (m.Contains("guard") || m.Contains("safety") || m.Contains("embed") || m.Contains("retriever") || m.Contains("reranker")
-            || m.Contains("reward") || m.Contains("parse") || m.Contains("detector") || m.Contains("clip") || m.Contains("riva-translate"))
+        if (IsExcludedFromSelection(m))
         {
             return null;
         }
@@ -104,6 +103,129 @@ internal sealed class ModelSelectionStore
 
         return fallback;
     }
+
+    /// <summary>
+    /// Exact-match-only variant of <see cref="FindModelSelectionEntry"/> used for
+    /// routing decisions. Two differences from the discovery-time matcher:
+    /// 1. No substring fallback: "k3" must never claim "k3-256k" and vice versa.
+    /// 2. Only real configured entries qualify — the synthetic defaults returned by
+    ///    <see cref="GetProviderModelSelections"/> for providers without a config
+    ///    file must not make a provider claim models it never declared.
+    /// </summary>
+    internal ModelSelectionEntry? FindExactModelSelectionEntry(string model, string providerName)
+    {
+        string m = model.ToLowerInvariant();
+
+        if (IsExcludedFromSelection(m))
+        {
+            return null;
+        }
+
+        if (!_providerModelSelections.TryGetValue(providerName, out ModelSelectionEntry[]? entries))
+        {
+            return null;
+        }
+
+        foreach (ModelSelectionEntry entry in entries.OrderBy(x => x.Priority))
+        {
+            if (entry.Enabled && m.Equals(entry.Match, StringComparison.OrdinalIgnoreCase))
+            {
+                return entry;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Last-slash-segment variant of <see cref="FindExactModelSelectionEntry"/>:
+    /// "muse-spark-1.1" matches the configured entry "meta/muse-spark-1.1". Used to
+    /// round-trip /api/tags display names, which strip the vendor prefix from
+    /// slash-qualified matches. Exact matches always win elsewhere first.
+    /// </summary>
+    internal ModelSelectionEntry? FindSuffixModelSelectionEntry(string model, string providerName)
+    {
+        // A supplied vendor is part of the upstream identity, never discard it.
+        if (model.Contains('/')) return null;
+        string m = model.ToLowerInvariant();
+
+        if (IsExcludedFromSelection(m))
+        {
+            return null;
+        }
+
+        if (!_providerModelSelections.TryGetValue(providerName, out ModelSelectionEntry[]? entries))
+        {
+            return null;
+        }
+
+        int slash = m.LastIndexOf('/');
+        string wanted = slash >= 0 && slash < m.Length - 1 ? m[(slash + 1)..] : m;
+
+        foreach (ModelSelectionEntry entry in entries.OrderBy(x => x.Priority))
+        {
+            if (!entry.Enabled)
+            {
+                continue;
+            }
+
+            string matchLower = entry.Match.ToLowerInvariant();
+            int matchSlash = matchLower.LastIndexOf('/');
+            string matchSegment = matchSlash >= 0 && matchSlash < matchLower.Length - 1
+                ? matchLower[(matchSlash + 1)..]
+                : matchLower;
+
+            if (matchSegment.Equals(wanted, StringComparison.OrdinalIgnoreCase))
+            {
+                return entry;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Display-name counterpart of <see cref="FindExactModelSelectionEntry"/>: matches
+    /// a configured entry by its exact <c>display_name</c> (e.g. "Qwen3.7 Max"), so the
+    /// custom display names emitted by /api/tags round-trip back to their canonical
+    /// model/provider. Returns the entry (its <c>Match</c> is the canonical model id).
+    /// </summary>
+    internal ModelSelectionEntry? FindExactDisplayNameEntry(string displayName, string providerName)
+    {
+        string m = displayName.Trim();
+
+        if (IsExcludedFromSelection(m.ToLowerInvariant()))
+        {
+            return null;
+        }
+
+        if (!_providerModelSelections.TryGetValue(providerName, out ModelSelectionEntry[]? entries))
+        {
+            return null;
+        }
+
+        foreach (ModelSelectionEntry entry in entries.OrderBy(x => x.Priority))
+        {
+            if (entry.Enabled
+                && !string.IsNullOrWhiteSpace(entry.DisplayName)
+                && m.Equals(entry.DisplayName.Trim(), StringComparison.OrdinalIgnoreCase))
+            {
+                return entry;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Model categories that are never selectable for chat routing (guardrails,
+    /// embeddings, rerankers, etc.).
+    /// </summary>
+    private static bool IsExcludedFromSelection(string lowercaseModel) =>
+        lowercaseModel.Contains("guard") || lowercaseModel.Contains("safety") || lowercaseModel.Contains("embed")
+        || lowercaseModel.Contains("retriever") || lowercaseModel.Contains("reranker") || lowercaseModel.Contains("reward")
+        || lowercaseModel.Contains("parse") || lowercaseModel.Contains("detector") || lowercaseModel.Contains("clip")
+        || lowercaseModel.Contains("riva-translate");
 
     private static Dictionary<string, ModelSelectionEntry[]> LoadProviderModelSelections()
     {

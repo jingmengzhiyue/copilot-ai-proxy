@@ -258,13 +258,13 @@ The proxy does not hot-reload `config/model-selection/*.json`. After restart, ch
 
 ## Qualified Model Aliases
 
-The `/api/tags` endpoint now returns `model` fields in the format `model@provider:latest` (e.g., `deepseek-v4-pro@ollama:latest`). This qualified alias ensures that when the client sends this model name back in a request, the proxy routes it to the **correct specific provider** instead of falling back to the default provider (DeepSeek).
+The `/api/tags` endpoint emits `name` as `"{PROVIDER} - {display_name or full upstream id}:latest"` and `model` as `"{upstream id}@{provider}:latest"`. Both fields preserve the originating provider through the shared `ModelCatalogService.ResolveRoute` used by chat and show endpoints. Vendor prefixes are retained to avoid collisions. The optional bare `aliases` remain automatic routing requests; only qualified aliases pin a provider.
 
 **How it works:**
-1. `/api/tags` returns: `"model": "deepseek-v4-pro@ollama:latest"`
-2. Client sends: `{"model": "deepseek-v4-pro@ollama:latest"}`
-3. `ProviderRegistry.ResolveModel()` strips `:latest` → `deepseek-v4-pro@ollama`
-4. The `@ollama` suffix forces routing to the Ollama provider (no failover)
+1. `/api/tags` returns: `"name": "KIMICODE - k3:latest"`, `"model": "k3@kimicode:latest"`, `"aliases": ["k3", "k3@kimicode:latest"]`
+2. Client sends any of them back, e.g. `{"model": "KIMICODE - k3:latest"}`
+3. The shared resolver selects canonical model `k3` and provider `kimicode`. Only terminal `:latest` is a compatibility tag, and literal registered IDs take precedence; `:batch` and `:free` are preserved.
+4. The `KIMICODE - ` prefix (or `@kimicode` suffix) forces strict routing to the kimicode provider; tag and prefix are stripped from the upstream request body
 
 **For bare model names** (e.g., `deepseek-v4-pro`), the proxy resolves to the lowest-priority claimant provider based on discovery order. To pin a specific provider, use the qualified `model@provider` form.
 
@@ -277,9 +277,10 @@ Both endpoints include response headers for debugging routing decisions:
 | Header | Source | Description |
 |--------|--------|-------------|
 | `X-Proxy-Requested-Model` | Both | What the client sent |
+| `X-Proxy-Normalized-Model` | Both | Canonical request identity before default fallback |
 | `X-Proxy-Resolved-Model` | Both | Internal model after resolution |
-| `X-Proxy-Upstream-Model` | Both | Model sent to upstream API |
-| `X-Proxy-Provider` | Both | Provider that handled the request |
+| `X-Proxy-Upstream-Model` | `/api/chat` | Model sent to upstream API |
+| `X-Proxy-Provider` | `/api/chat` | Provider that handled the request |
 | `X-Proxy-Candidate-Count` | `/v1/*` | Number of failover candidates |
 | `X-Proxy-Primary-Provider` | `/v1/*` | Primary candidate provider |
 | `X-Proxy-Primary-Upstream` | `/v1/*` | Primary upstream model |

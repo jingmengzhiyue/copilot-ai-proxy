@@ -89,14 +89,19 @@ Both `/v1/chat/completions` and `/api/chat` endpoints include diagnostic respons
 | Header | Description | Example |
 |--------|-------------|---------|
 | `X-Proxy-Requested-Model` | The model name as sent by the client | `deepseek-v4-pro:latest` |
-| `X-Proxy-Resolved-Model` | The resolved internal model id after alias resolution | `deepseek-v4-pro` |
-| `X-Proxy-Upstream-Model` | The model id that was sent to the upstream API | `deepseek-v4-pro` |
-| `X-Proxy-Provider` | The provider that handled the request | `deepseek`, `zenmux`, `ollama` |
+| `X-Proxy-Normalized-Model` | Canonical request identity before default fallback | `k3` |
+| `X-Proxy-Resolved-Model` | Effective model after routing, including default fallback | `deepseek-v4-pro` |
+| `X-Proxy-Upstream-Model` | Upstream model (`/api/chat` only) | `deepseek-v4-pro` |
+| `X-Proxy-Provider` | Selected provider (`/api/chat` only) | `deepseek`, `zenmux`, `ollama` |
 | `X-Proxy-Candidate-Count` | Number of failover candidates (OpenAI endpoint only) | `1`, `3` |
 | `X-Proxy-Primary-Provider` | Primary candidate provider (OpenAI endpoint only) | `nvidia` |
 | `X-Proxy-Primary-Upstream` | Primary upstream model (OpenAI endpoint only) | `qwen/qwen3.5-397b-a17b` |
+| `X-Proxy-Provider-Hint` | Explicit `@provider` / `provider/model` hint from the request, when present | `kimicode` |
+| `X-Proxy-Fallback-Used` | `true` when an unknown bare model was degraded to the configured default model | `false` |
 
 > Use these headers to verify that the expected provider is being selected. If the provider is unexpected, the model name may need a qualified alias (e.g. `model@provider:latest`).
+>
+> Routing semantics: an explicit `model@provider` (or `provider/model`) hint is **strict** — the request is only offered to that provider, the `@provider` suffix is never forwarded upstream, and an unknown provider or model returns `404` (`provider_not_found` / `model_not_found`) instead of falling back to the default model. Bare model ids auto-route by configured priority, falling back to the default model only when no provider claims the id (flagged via `X-Proxy-Fallback-Used: true`). Malformed JSON bodies return `400` (`invalid_json`).
 
 ---
 
@@ -182,7 +187,7 @@ Chat completion endpoint compatible with OpenAI API.
 
 **Supported providers:** DeepSeek, OpenAI, NVIDIA NIM, Groq, OpenRouter, Ollama Cloud, Moonshot/Kimi, Cerebras, ZenMux. The proxy automatically filters unsupported parameters per provider.
 
-**Diagnostic headers:** Every response includes `X-Proxy-Requested-Model`, `X-Proxy-Resolved-Model`, `X-Proxy-Provider`, `X-Proxy-Candidate-Count`, `X-Proxy-Primary-Provider`, `X-Proxy-Primary-Upstream`.
+**Diagnostic headers:** Responses that reach routing include `X-Proxy-Requested-Model`, `X-Proxy-Normalized-Model`, `X-Proxy-Resolved-Model`, `X-Proxy-Candidate-Count`, and `X-Proxy-Fallback-Used`. Primary-provider headers are present when a candidate exists. Invalid JSON is rejected before routing. Primary-provider headers identify the initial candidate, not necessarily a later successful failover.
 
 ---
 

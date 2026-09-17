@@ -459,26 +459,26 @@ public class ModelSelectionStoreTests
     }
 
     [Fact]
-    public void FindModelSelectionEntry_Zhipu_Glm52_FindsEntry()
+    public void FindModelSelectionEntry_Zhipu_Glm53_FindsEntry()
     {
         ModelSelectionStore store = new();
 
-        ModelSelectionEntry? entry = store.FindModelSelectionEntry("glm-5.2", "zhipu");
+        ModelSelectionEntry? entry = store.FindModelSelectionEntry("glm-5.3", "zhipu");
 
         Assert.NotNull(entry);
-        Assert.Equal("glm-5.2", entry.Value.Match);
+        Assert.Equal("glm-5.3", entry.Value.Match);
         Assert.Equal("z-ai", entry.Value.Execution.Family);
     }
 
     [Fact]
-    public void FindModelSelectionEntry_Zhipu_Glm52_HasDisplayName()
+    public void FindModelSelectionEntry_Zhipu_Glm53_HasDisplayName()
     {
         ModelSelectionStore store = new();
 
-        ModelSelectionEntry? entry = store.FindModelSelectionEntry("glm-5.2", "zhipu");
+        ModelSelectionEntry? entry = store.FindModelSelectionEntry("glm-5.3", "zhipu");
 
         Assert.NotNull(entry);
-        Assert.Equal("GLM 5.2", entry.Value.DisplayName);
+        Assert.Equal("glm-5.3", entry.Value.DisplayName);
     }
 
     [Fact]

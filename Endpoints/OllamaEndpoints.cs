@@ -37,19 +37,8 @@ internal static class OllamaEndpoints
                 }
             }
 
-            static string NormalizeModelForDisplay(string model)
-            {
-                string clean = model.Trim();
-                int slash = clean.IndexOf('/');
-                if (slash > 0 && slash < clean.Length - 1)
-                    clean = clean[(slash + 1)..];
-
-                return clean;
-            }
-
-            // Group by provider + normalized display model to reduce duplicate aliases such as
-            // "kimi-k2.6" and "moonshotai/kimi-k2.6" in the same provider slot.
-            // For each group, keep the best entry by priority and then by readability (prefer non-prefixed ids).
+            // Keep vendor prefixes so distinct upstream identities cannot collapse
+            // into the same display name. Explicit custom labels retain their priority.
             var curated = configuredEnabled
                 .Select(x => new
                 {
@@ -58,7 +47,7 @@ internal static class OllamaEndpoints
                     x.Priority,
                     x.DisplayName,
                     DisplayModel = string.IsNullOrWhiteSpace(x.DisplayName)
-                        ? NormalizeModelForDisplay(x.Model)
+                        ? x.Model.Trim()
                         : x.DisplayName.Trim()
                 })
                 .GroupBy(x => $"{x.Provider.ToLowerInvariant()}::{x.DisplayModel.ToLowerInvariant()}")
@@ -78,9 +67,7 @@ internal static class OllamaEndpoints
                 {
                     string providerPrefix = x.Provider.ToUpperInvariant();
                     bool hasCustomDisplayName = !string.IsNullOrWhiteSpace(x.DisplayName);
-                    string displayName = hasCustomDisplayName
-                        ? x.DisplayModel
-                        : $"{providerPrefix} - {x.DisplayModel}";
+                    string displayName = $"{providerPrefix} - {x.DisplayModel}";
                     string routedModel = hasCustomDisplayName ? x.DisplayModel : x.Model;
                     string upstreamModel = x.Model;
                     // Use a provider-qualified alias so that when the client sends this back
@@ -93,9 +80,8 @@ internal static class OllamaEndpoints
                     return new
                     {
                         name = displayName + ":latest",
-                        // Expose the model name without provider qualifier so clients that
-                        // don't expect the @provider form will match easily.
-                        model = routedModel + ":latest",
+                        // Both client-facing fields preserve the provider identity.
+                        model = qualifiedUpstreamModel,
                         // Keep the provider-qualified alias in case clients need it for routing.
                         aliases = new[] { routedModel, qualifiedModel, upstreamModel, qualifiedUpstreamModel }
                             .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -143,8 +129,12 @@ internal static class OllamaEndpoints
         app.MapGet("/api/show", async (HttpContext ctx, string? model, ModelCatalogService modelCatalog, ProviderRegistry providerRegistry, OllamaResponseBuilder ollamaResponseBuilder) =>
         {
             await modelCatalog.RefreshAvailableModelsIfNeeded(ctx.RequestAborted);
-            string resolved = providerRegistry.ResolveModel(model);
-            return Results.Json(ollamaResponseBuilder.BuildOllamaShowResponse(resolved), JsonDefaults.SnakeCase);
+            // Shared resolver: /api/tags names ("PROVIDER - model:latest"), qualified
+            // aliases and bare ids all normalize to the same canonical model here.
+            ResolvedRoute route = modelCatalog.ResolveRoute(model);
+            return route.Error != RouteErrorKind.None
+                ? Results.Json(new { error = route.ErrorMessage }, statusCode: 404)
+                : Results.Json(ollamaResponseBuilder.BuildOllamaShowResponse(route.Model), JsonDefaults.SnakeCase);
         });
 
         app.MapPost("/api/show", async (HttpContext ctx, ModelCatalogService modelCatalog, ProviderRegistry providerRegistry, OllamaResponseBuilder ollamaResponseBuilder) =>
@@ -156,13 +146,20 @@ internal static class OllamaEndpoints
             try
             {
                 using JsonDocument d = JsonDocument.Parse(body);
+                if (d.RootElement.ValueKind != JsonValueKind.Object)
+                    return Results.Json(new { error = "Invalid JSON request body." }, statusCode: 400);
                 if (d.RootElement.TryGetProperty("model", out JsonElement m) && m.ValueKind == JsonValueKind.String)
                     model = m.GetString();
             }
-            catch { }
+            catch (JsonException)
+            {
+                return Results.Json(new { error = "Invalid JSON request body." }, statusCode: 400);
+            }
 
-            string resolved = providerRegistry.ResolveModel(model);
-            return Results.Json(ollamaResponseBuilder.BuildOllamaShowResponse(resolved), JsonDefaults.SnakeCase);
+            ResolvedRoute route = modelCatalog.ResolveRoute(model);
+            return route.Error != RouteErrorKind.None
+                ? Results.Json(new { error = route.ErrorMessage }, statusCode: 404)
+                : Results.Json(ollamaResponseBuilder.BuildOllamaShowResponse(route.Model), JsonDefaults.SnakeCase);
         });
 
         app.MapPost("api/chat", async (
@@ -177,24 +174,74 @@ internal static class OllamaEndpoints
             await modelCatalog.RefreshAvailableModelsIfNeeded(ct);
             using StreamReader reader = new(ctx.Request.Body);
             string body = await reader.ReadToEndAsync(ct);
-            using JsonDocument doc = JsonDocument.Parse(body);
+
+            // A malformed body is a client error (400), never a 500 with a stack trace.
+            JsonDocument? parsedDoc;
+            try
+            {
+                parsedDoc = JsonDocument.Parse(body);
+                if (parsedDoc.RootElement.ValueKind != JsonValueKind.Object)
+                {
+                    parsedDoc.Dispose();
+                    parsedDoc = null;
+                }
+            }
+            catch (JsonException)
+            {
+                parsedDoc = null;
+            }
+
+            if (parsedDoc is null)
+            {
+                ctx.Response.StatusCode = StatusCodes.Status400BadRequest;
+                ctx.Response.ContentType = "application/json";
+                await ctx.Response.WriteAsync("{\"error\":\"Invalid JSON request body.\"}", ct);
+                return;
+            }
+
+            using JsonDocument doc = parsedDoc;
             JsonElement root = doc.RootElement;
+            if (root.TryGetProperty("stream", out JsonElement streamValue)
+                && streamValue.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
+            {
+                ctx.Response.StatusCode = 400;
+                await ctx.Response.WriteAsJsonAsync(new { error = "stream must be a boolean." }, ct);
+                return;
+            }
             bool isStream = root.TryGetProperty("stream", out JsonElement sp) && sp.GetBoolean();
 
             string ollamaRequestedModel = root.TryGetProperty("model", out JsonElement om) && om.ValueKind == JsonValueKind.String
                 ? om.GetString()! : providerRegistry.DefaultModel;
-            string ollamaEffectiveModel = providerRegistry.ResolveModel(ollamaRequestedModel);
-            string ollamaUpstreamModel = providerRegistry.ResolveUpstreamModel(ollamaEffectiveModel);
-            ProviderInfo ollamaProvider = providerRegistry.ResolveProvider(ollamaEffectiveModel);
+
+            // Same central routing as /v1/chat/completions: an explicit
+            // "model@provider" hint is strict and never falls back.
+            ResolvedRoute route = modelCatalog.ResolveRoute(ollamaRequestedModel);
+            if (route.Error != RouteErrorKind.None || route.Candidates.Count == 0)
+            {
+                ctx.Response.StatusCode = StatusCodes.Status404NotFound;
+                ctx.Response.ContentType = "application/json";
+                string message = route.ErrorMessage ?? $"No provider candidate available for model '{route.Model}'.";
+                await ctx.Response.WriteAsync($"{{\"error\":{JsonSerializer.Serialize(message)}}}", ct);
+                return;
+            }
+
+            string ollamaEffectiveModel = route.Model;
+            (ProviderInfo ollamaProvider, string ollamaUpstreamModel) = route.Candidates[0];
             ModelExecutionConfig ollamaExec = modelCatalog.GetExecutionConfigForModel(
                 ollamaEffectiveModel,
                 ollamaProvider.Name);
 
             // ── Diagnostic headers ───────────────────────────────────────
-            ctx.Response.Headers["X-Proxy-Requested-Model"] = ollamaRequestedModel;
-            ctx.Response.Headers["X-Proxy-Resolved-Model"] = ollamaEffectiveModel;
+            ctx.Response.Headers["X-Proxy-Requested-Model"] = route.RequestedModel;
+            ctx.Response.Headers["X-Proxy-Normalized-Model"] = route.NormalizedModel;
+            ctx.Response.Headers["X-Proxy-Resolved-Model"] = route.Model;
             ctx.Response.Headers["X-Proxy-Upstream-Model"] = ollamaUpstreamModel;
             ctx.Response.Headers["X-Proxy-Provider"] = ollamaProvider.Name;
+            ctx.Response.Headers["X-Proxy-Fallback-Used"] = route.FallbackUsed ? "true" : "false";
+            if (route.ProviderHint is not null)
+            {
+                ctx.Response.Headers["X-Proxy-Provider-Hint"] = route.ProviderHint;
+            }
 
             using CancellationTokenSource? ollamaTimeoutCts = modelCatalog.CreateModelTimeoutCts(
                 ollamaEffectiveModel,

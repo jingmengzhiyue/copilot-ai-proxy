@@ -696,10 +696,13 @@ Chat responses include routing headers:
 | Header | Meaning |
 |---|---|
 | `X-Proxy-Requested-Model` | Model name sent by the client. |
-| `X-Proxy-Resolved-Model` | Internal model alias after normalization. |
+| `X-Proxy-Normalized-Model` | Canonical request identity before default fallback. |
+| `X-Proxy-Resolved-Model` | Effective model after routing, including default fallback. |
 | `X-Proxy-Upstream-Model` | Upstream model id sent to the provider. |
 | `X-Proxy-Provider` | Provider selected for the request. |
 | `X-Proxy-Candidate-Count` | Number of failover candidates for OpenAI-compatible requests. |
+| `X-Proxy-Provider-Hint` | Explicit `@provider` / `provider/model` hint from the request, when present. |
+| `X-Proxy-Fallback-Used` | `true` when an unknown bare model was degraded to the configured default model. |
 
 ## Authentication
 

@@ -191,13 +191,13 @@ OllamaEndpoints.cs
 
 The `/api/tags` endpoint emits `model` fields in `model@provider:latest` format. This ensures that when a client sends this model name back, the proxy routes it to the **exact provider** rather than falling back to the default (DeepSeek).
 
-**Resolution chain:**
+**Resolution chain (central: `ModelCatalogService.ResolveRoute`):**
 1. Client sends: `{"model": "deepseek-v4-pro@ollama:latest"}`
-2. `StripTagSuffix(":latest")` → `deepseek-v4-pro@ollama`
-3. `_modelToProvider.ContainsKey("deepseek-v4-pro@ollama")` → ✅
-4. Returns `deepseek-v4-pro@ollama`, which maps to the **ollama** provider
+2. Preserve registered literal IDs first; otherwise split the qualified alias into model `deepseek-v4-pro` and hint `ollama:latest`. Strip only terminal `:latest` from the hint.
+3. **Strict routing**: only the hinted provider is consulted. Catalog and configured exact IDs are tried before compatibility suffix/display aliases. A discovered dated variant cannot inherit the configured base model's display name.
+4. Unknown provider → `404 provider_not_found`; model unavailable at that provider → `404 model_not_found`. There is **no** fallback to another provider or to the default model, and the `@provider` suffix is stripped from the upstream request body.
 
-**For bare model names** (no `@provider`), the proxy returns the lowest-priority claimant provider. To pin a provider, use the qualified `model@provider` form.
+**For bare model names** (no `@provider`), the proxy auto-routes: discovered catalog first, then config-declared exact matches (`config/model-selection/*.json`, which keep the model routable even when provider discovery fails), and only then the configured default model — flagged via `X-Proxy-Fallback-Used: true`.
 
 ---
 
@@ -214,6 +214,8 @@ Both endpoints include response headers for debugging:
 | `X-Proxy-Candidate-Count` | `/v1/*` | Number of failover candidates |
 | `X-Proxy-Primary-Provider` | `/v1/*` | Primary candidate provider |
 | `X-Proxy-Primary-Upstream` | `/v1/*` | Primary upstream model |
+| `X-Proxy-Provider-Hint` | Both | Explicit provider hint from the request, when present |
+| `X-Proxy-Fallback-Used` | Both | `true` when an unknown bare model degraded to the default model |
 
 ---
 

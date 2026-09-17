@@ -86,63 +86,100 @@ internal sealed class ProviderRegistry
         return _providers[0];
     }
 
-    internal string ResolveModel(string? requestedModel)
+    internal string ResolveModel(string? requestedModel) =>
+        TryResolveCatalogModel(requestedModel, out string resolved) ? resolved : DefaultModel;
+
+    /// <summary>
+    /// Attempts to resolve a requested model id against the discovered catalog.
+    /// Returns false (instead of degrading to <see cref="DefaultModel"/>) when the id
+    /// is unknown, so callers can distinguish "resolved" from "fell back to default".
+    /// </summary>
+    internal bool TryResolveCatalogModel(string? requestedModel, out string resolved)
     {
+        resolved = DefaultModel;
         if (_providers.Count == 0)
-            return DefaultModel;
+            return false;
 
-        if (!string.IsNullOrWhiteSpace(requestedModel))
+        if (string.IsNullOrWhiteSpace(requestedModel))
+            return false;
+
+        // Verbatim hit first: some upstream ids legitimately contain ':' (e.g.
+        // OpenRouter "model:free" / "model:batch") and must not lose that suffix.
+        if (_modelToProvider.ContainsKey(requestedModel))
         {
-            // Strip Ollama-style tag suffix (e.g., "deepseek-v4-pro:latest" → "deepseek-v4-pro")
-            string cleanModel = StripTagSuffix(requestedModel);
-            if (_modelToProvider.ContainsKey(cleanModel))
-                return cleanModel;
+            resolved = requestedModel;
+            return true;
+        }
 
-            // Accept the OpenAI-style "provider/model" form (e.g. "groq/llama-3.3-70b-versatile"
-            // or "nvidia/qwen3.5-397b-a17b"). Some providers (NVIDIA in particular) expose
-            // upstream ids with a slash prefix ("qwen/qwen3.5-397b-a17b"), so first try the
-            // full id verbatim, then fall back to stripping the provider prefix, and finally
-            // try matching the requested bare against any upstream id owned by the hinted
-            // provider that ends with that bare.
-            int slash = cleanModel.IndexOf('/');
-            if (slash > 0 && slash < cleanModel.Length - 1)
+        // Strip Ollama-style tag suffix (e.g., "deepseek-v4-pro:latest" → "deepseek-v4-pro")
+        string cleanModel = StripTagSuffix(requestedModel);
+        if (_modelToProvider.ContainsKey(cleanModel))
+        {
+            resolved = cleanModel;
+            return true;
+        }
+
+        // Accept the OpenAI-style "provider/model" form (e.g. "groq/llama-3.3-70b-versatile"
+        // or "nvidia/qwen3.5-397b-a17b"). Some providers (NVIDIA in particular) expose
+        // upstream ids with a slash prefix ("qwen/qwen3.5-397b-a17b"), so first try the
+        // full id verbatim, then fall back to stripping the provider prefix, and finally
+        // try matching the requested bare against any upstream id owned by the hinted
+        // provider that ends with that bare.
+        int slash = cleanModel.IndexOf('/');
+        if (slash > 0 && slash < cleanModel.Length - 1)
+        {
+            string bare = cleanModel[(slash + 1)..];
+            if (_modelToProvider.ContainsKey(bare))
             {
-                if (_modelToProvider.ContainsKey(cleanModel))
-                    return cleanModel;
+                resolved = bare;
+                return true;
+            }
 
-                string bare = cleanModel[(slash + 1)..];
-                if (_modelToProvider.ContainsKey(bare))
-                    return bare;
-
-                // Last-resort match: look for any upstream id in the hinted provider
-                // whose suffix equals the requested bare (e.g. requested bare
-                // "qwen3.5-397b-a17b" matches upstream "qwen/qwen3.5-397b-a17b").
-                string? providerHint = cleanModel[..slash];
-                if (_modelToProvider.TryGetValue(bare, out _))
+            // Last-resort match: look for any upstream id in the hinted provider
+            // whose suffix equals the requested bare (e.g. requested bare
+            // "qwen3.5-397b-a17b" matches upstream "qwen/qwen3.5-397b-a17b").
+            string? providerHint = cleanModel[..slash];
+            foreach (KeyValuePair<string, ProviderInfo> kv in _modelToProvider)
+            {
+                if (!string.Equals(kv.Value.Name, providerHint, StringComparison.OrdinalIgnoreCase))
+                    continue;
+                int lastSlash = kv.Key.LastIndexOf('/');
+                string suffix = lastSlash > 0 ? kv.Key[(lastSlash + 1)..] : kv.Key;
+                if (string.Equals(suffix, bare, StringComparison.OrdinalIgnoreCase))
                 {
-                    return bare; // unreachable, but keeps the flow explicit
-                }
-
-                foreach (KeyValuePair<string, ProviderInfo> kv in _modelToProvider)
-                {
-                    if (!string.Equals(kv.Value.Name, providerHint, StringComparison.OrdinalIgnoreCase))
-                        continue;
-                    int lastSlash = kv.Key.LastIndexOf('/');
-                    string suffix = lastSlash > 0 ? kv.Key[(lastSlash + 1)..] : kv.Key;
-                    if (string.Equals(suffix, bare, StringComparison.OrdinalIgnoreCase))
-                        return kv.Key;
+                    resolved = kv.Key;
+                    return true;
                 }
             }
         }
 
-        return DefaultModel;
+        return false;
+    }
+
+    /// <summary>
+    /// Finds a configured provider by exact name (case-insensitive). Never uses
+    /// prefix/substring matching: "kimi" must not resolve the "kimicode" provider
+    /// or vice versa.
+    /// </summary>
+    internal ProviderInfo? FindConfiguredProvider(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            return null;
+
+        foreach (ProviderInfo provider in _providers)
+        {
+            if (string.Equals(provider.Name, name, StringComparison.OrdinalIgnoreCase))
+                return provider;
+        }
+
+        return null;
     }
 
     /// <summary>Removes the tag portion of an Ollama model name (e.g. "model:latest" → "model").</summary>
-    private static string StripTagSuffix(string model)
+    internal static string StripTagSuffix(string model)
     {
-        int colonIdx = model.IndexOf(':');
-        return colonIdx > 0 ? model[..colonIdx] : model;
+        return model.EndsWith(":latest", StringComparison.OrdinalIgnoreCase)
+            ? model[..^7] : model;
     }
 
     internal string ResolveUpstreamModel(string? requestedModel)
@@ -211,6 +248,8 @@ internal sealed class ProviderRegistry
                 continue;
             }
 
+            baseUrl = NormalizeBaseUrl(baseUrl, caps);
+
             HttpClient provClient = httpClientFactory.CreateProviderClient(providerName, baseUrl, apiKey);
             _providers.Add(new ProviderInfo(providerName, apiKey, baseUrl, provClient, caps));
         }
@@ -226,6 +265,7 @@ internal sealed class ProviderRegistry
             && !_providers.Any(p => p.BaseUrl.Equals(ollamaBaseUrl, StringComparison.OrdinalIgnoreCase)))
         {
             ProviderCapabilities ollamaCaps = ProviderCapabilitiesRegistry.Get("ollama");
+            ollamaBaseUrl = NormalizeBaseUrl(ollamaBaseUrl, ollamaCaps);
             HttpClient localClient = httpClientFactory.CreateProviderClient("ollama", ollamaBaseUrl, apiKey: "");
             _providers.Add(new ProviderInfo("ollama", "", ollamaBaseUrl, localClient, ollamaCaps));
         }
@@ -235,9 +275,34 @@ internal sealed class ProviderRegistry
         if (!string.IsNullOrWhiteSpace(legacyKey) && !_providers.Any(p => p.Name == "deepseek"))
         {
             ProviderCapabilities deepseekCaps = ProviderCapabilitiesRegistry.Get("deepseek");
-            string legacyUrl = Environment.GetEnvironmentVariable("DEEPSEEK_BASE_URL") ?? deepseekCaps.DefaultBaseUrl;
+            string legacyUrl = NormalizeBaseUrl(
+                Environment.GetEnvironmentVariable("DEEPSEEK_BASE_URL") ?? deepseekCaps.DefaultBaseUrl,
+                deepseekCaps);
             _providers.Add(new ProviderInfo("deepseek", legacyKey, legacyUrl,
                 httpClientFactory.CreateProviderClient("deepseek", legacyUrl, legacyKey), deepseekCaps));
         }
+    }
+
+    /// <summary>
+    /// Collapses a duplicated API-version segment between the configured base URL
+    /// and the capability paths. Users often paste the full versioned endpoint
+    /// (e.g. "https://api.kimi.com/coding/v1") while <see cref="ProviderCapabilities.ChatPath"/>
+    /// already carries the version prefix ("v1/chat/completions") — joining both
+    /// would produce ".../v1/v1/chat/completions" and an upstream 404.
+    /// </summary>
+    private static string NormalizeBaseUrl(string baseUrl, ProviderCapabilities caps)
+    {
+        string trimmed = baseUrl.TrimEnd('/');
+        string? firstSegment = caps.ChatPath
+            .Split('/', StringSplitOptions.RemoveEmptyEntries)
+            .FirstOrDefault();
+
+        if (firstSegment is not null
+            && trimmed.EndsWith($"/{firstSegment}", StringComparison.OrdinalIgnoreCase))
+        {
+            return trimmed[..(trimmed.Length - firstSegment.Length - 1)];
+        }
+
+        return trimmed;
     }
 }

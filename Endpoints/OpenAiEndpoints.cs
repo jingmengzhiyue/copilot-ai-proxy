@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
@@ -7,6 +8,9 @@ internal static class OpenAiEndpoints
 {
     internal static IEndpointRouteBuilder MapOpenAiEndpoints(this IEndpointRouteBuilder app)
     {
+        ILogger routingLogger = app.ServiceProvider
+            .GetRequiredService<ILoggerFactory>()
+            .CreateLogger("Proxy.Routing");
         app.MapGet("/v1/models", (HttpContext ctx, ModelCatalogService modelCatalog, ProviderRegistry providerRegistry, ModelSelectionStore modelSelectionStore) =>
         {
             // Build a complete list from static config files (always available) plus
@@ -104,36 +108,89 @@ internal static class OpenAiEndpoints
             using StreamReader bodyReader = new(ctx.Request.Body, Encoding.UTF8, false, 1024);
             string rawBody = await bodyReader.ReadToEndAsync(ct);
 
-            using JsonDocument doc = JsonDocument.Parse(rawBody);
+            // A malformed body is a client error (400), never a 500 with a stack trace.
+            JsonDocument? parsedDoc;
+            try
+            {
+                parsedDoc = JsonDocument.Parse(rawBody);
+                if (parsedDoc.RootElement.ValueKind != JsonValueKind.Object)
+                {
+                    parsedDoc.Dispose();
+                    parsedDoc = null;
+                }
+            }
+            catch (JsonException)
+            {
+                parsedDoc = null;
+            }
+
+            if (parsedDoc is null)
+            {
+                routingLogger.LogWarning("[RequestError] InvalidJson Path=/v1/chat/completions");
+                ctx.Response.StatusCode = StatusCodes.Status400BadRequest;
+                ctx.Response.ContentType = "application/json";
+                await ctx.Response.WriteAsync(
+                    "{\"error\":{\"message\":\"Invalid JSON request body.\",\"type\":\"invalid_request_error\",\"param\":null,\"code\":\"invalid_json\"}}", ct);
+                return;
+            }
+
+            using JsonDocument doc = parsedDoc;
             JsonElement root = doc.RootElement;
+            if (root.TryGetProperty("stream", out JsonElement streamValue)
+                && streamValue.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
+            {
+                ctx.Response.StatusCode = 400;
+                await ctx.Response.WriteAsJsonAsync(new { error = new { message = "stream must be a boolean.", type = "invalid_request_error", code = "invalid_parameter", param = "stream" } }, ct);
+                return;
+            }
             bool isStream = root.TryGetProperty("stream", out JsonElement sp) && sp.GetBoolean();
 
             string reqModel = root.TryGetProperty("model", out JsonElement rm) && rm.ValueKind == JsonValueKind.String
                 ? rm.GetString()! : providerRegistry.DefaultModel;
-            string effectiveModel = providerRegistry.ResolveModel(reqModel);
-            // Honour an explicit OpenAI-style "provider/model" hint so the request goes
-            // to the requested provider even when the bare model id is owned by a
-            // different one in the catalog.
-            ProviderInfo? requestedProvider = ExtractProviderHint(reqModel, providerRegistry);
-            IReadOnlyList<(ProviderInfo Provider, string UpstreamModel)> candidates;
-            if (requestedProvider is { } pinnedHint)
-            {
-                string upstream = providerRegistry.ResolveUpstreamModel(effectiveModel);
-                candidates = [(pinnedHint, upstream)];
-            }
-            else
-            {
-                candidates = providerRegistry.ResolveCandidates(effectiveModel);
-            }
+
+            // Central routing: "model", "model@provider" or "provider/model".
+            // An explicit provider hint is STRICT — unknown provider/model is a 404
+            // and never falls back to another provider or to the default model.
+            ResolvedRoute route = modelCatalog.ResolveRoute(reqModel);
+            string effectiveModel = route.Model;
+            IReadOnlyList<(ProviderInfo Provider, string UpstreamModel)> candidates = route.Candidates;
 
             // ── Diagnostic headers ───────────────────────────────────────
-            ctx.Response.Headers["X-Proxy-Requested-Model"] = reqModel;
-            ctx.Response.Headers["X-Proxy-Resolved-Model"] = effectiveModel;
+            ctx.Response.Headers["X-Proxy-Requested-Model"] = route.RequestedModel;
+            ctx.Response.Headers["X-Proxy-Normalized-Model"] = route.NormalizedModel;
+            ctx.Response.Headers["X-Proxy-Resolved-Model"] = route.Model;
             ctx.Response.Headers["X-Proxy-Candidate-Count"] = candidates.Count.ToString();
+            ctx.Response.Headers["X-Proxy-Fallback-Used"] = route.FallbackUsed ? "true" : "false";
+            if (route.ProviderHint is not null)
+            {
+                ctx.Response.Headers["X-Proxy-Provider-Hint"] = route.ProviderHint;
+            }
+
             if (candidates.Count > 0)
             {
                 ctx.Response.Headers["X-Proxy-Primary-Provider"] = candidates[0].Provider.Name;
                 ctx.Response.Headers["X-Proxy-Primary-Upstream"] = candidates[0].UpstreamModel;
+            }
+
+            LogRouting(routingLogger, route);
+
+            if (route.Error != RouteErrorKind.None)
+            {
+                string code = route.Error == RouteErrorKind.ProviderNotFound ? "provider_not_found" : "model_not_found";
+                ctx.Response.StatusCode = StatusCodes.Status404NotFound;
+                ctx.Response.ContentType = "application/json";
+                await ctx.Response.WriteAsync(
+                    $"{{\"error\":{{\"message\":{JsonSerializer.Serialize(route.ErrorMessage)},\"type\":\"invalid_request_error\",\"param\":\"model\",\"code\":\"{code}\"}}}}", ct);
+                return;
+            }
+
+            if (candidates.Count == 0)
+            {
+                ctx.Response.StatusCode = StatusCodes.Status404NotFound;
+                ctx.Response.ContentType = "application/json";
+                await ctx.Response.WriteAsync(
+                    $"{{\"error\":{{\"message\":{JsonSerializer.Serialize($"No provider candidate available for model '{route.Model}'.")},\"type\":\"invalid_request_error\",\"param\":\"model\",\"code\":\"model_not_found\"}}}}", ct);
+                return;
             }
 
             string? modifiedRequest = requestTransformer.ModifyRequest(doc);
@@ -174,9 +231,21 @@ internal static class OpenAiEndpoints
                         }
 
                         using StringContent content = new(candidateBody, Encoding.UTF8, "application/json");
-                        HttpResponseMessage response = await candidateProvider.Client.SendAsync(
-                            new HttpRequestMessage(HttpMethod.Post, candidateProvider.Capabilities.ChatPath) { Content = content },
-                            candidateRequestCt);
+                        long candidateStart = Stopwatch.GetTimestamp();
+                        HttpResponseMessage response;
+                        try
+                        {
+                            response = await candidateProvider.Client.SendAsync(
+                                new HttpRequestMessage(HttpMethod.Post, candidateProvider.Capabilities.ChatPath) { Content = content },
+                                candidateRequestCt);
+                        }
+                        catch (Exception ex) when ((ex is HttpRequestException or OperationCanceledException) && !ct.IsCancellationRequested)
+                        {
+                            // Candidate unreachable / timed out: log and fail over to the
+                            // next candidate instead of surfacing a 500 to the client.
+                            LogUpstreamError(routingLogger, candidateProvider, candidateUpstream, null, candidateStart, ex.Message);
+                            continue;
+                        }
 
                         string respBody = await response.Content.ReadAsStringAsync(ct);
 
@@ -190,6 +259,7 @@ internal static class OpenAiEndpoints
                             return;
                         }
 
+                        LogUpstreamError(routingLogger, candidateProvider, candidateUpstream, (int)response.StatusCode, candidateStart, respBody);
                         lastResponse?.Dispose();
                         lastResponse = response;
                         lastBody = respBody;
@@ -197,9 +267,13 @@ internal static class OpenAiEndpoints
                     }
 
                     // All candidates failed: surface the last upstream error.
+                    routingLogger.LogError(
+                        "[UpstreamError] AllCandidatesFailed RequestedModel={RequestedModel} ResolvedModel={ResolvedModel} CandidateCount={CandidateCount} LastStatus={LastStatus}",
+                        route.RequestedModel, effectiveModel, candidates.Count,
+                        lastResponse is not null ? ((int)lastResponse.StatusCode).ToString() : "(none)");
                     ctx.Response.StatusCode = lastResponse is not null ? (int)lastResponse.StatusCode : StatusCodes.Status502BadGateway;
                     ctx.Response.ContentType = "application/json";
-                    await ctx.Response.WriteAsync(lastBody ?? "{\"error\":\"no provider candidate available\"}", ct);
+                    await ctx.Response.WriteAsync(lastBody ?? "{\"error\":{\"message\":\"All provider candidates failed.\",\"type\":\"upstream_error\",\"param\":null,\"code\":\"upstream_unavailable\"}}", ct);
                 }
                 finally
                 {
@@ -247,46 +321,95 @@ internal static class OpenAiEndpoints
             };
             upstreamReq.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/event-stream"));
 
-            using HttpResponseMessage upstreamResp = await provider.Client.SendAsync(
-                upstreamReq, HttpCompletionOption.ResponseHeadersRead, requestCt);
+            long streamStart = Stopwatch.GetTimestamp();
+            HttpResponseMessage? upstreamRespRaw;
+            try
+            {
+                upstreamRespRaw = await provider.Client.SendAsync(
+                    upstreamReq, HttpCompletionOption.ResponseHeadersRead, requestCt);
+            }
+            catch (Exception ex) when ((ex is HttpRequestException or OperationCanceledException) && !ct.IsCancellationRequested)
+            {
+                LogUpstreamError(routingLogger, provider, upstreamModel, null, streamStart, ex.Message);
+                ctx.Response.StatusCode = StatusCodes.Status502BadGateway;
+                ctx.Response.ContentType = "application/json";
+                await ctx.Response.WriteAsync(
+                    $"{{\"error\":{{\"message\":{JsonSerializer.Serialize($"Upstream provider '{provider.Name}' is unavailable: {ex.Message}")},\"type\":\"upstream_error\",\"param\":null,\"code\":\"upstream_unavailable\"}}}}", ct);
+                return;
+            }
+
+            using HttpResponseMessage upstreamResp = upstreamRespRaw;
 
             if (!upstreamResp.IsSuccessStatusCode)
             {
                 string errBody = await upstreamResp.Content.ReadAsStringAsync(ct);
+                LogUpstreamError(routingLogger, provider, upstreamModel, (int)upstreamResp.StatusCode, streamStart, errBody);
                 ctx.Response.StatusCode = (int)upstreamResp.StatusCode;
                 ctx.Response.ContentType = "application/json";
                 await ctx.Response.WriteAsync(errBody, ct);
                 return;
             }
 
-            await chatStreaming.StreamAndCache(upstreamResp, ctx.Response, ct);
+            await chatStreaming.StreamAndCache(upstreamResp, ctx.Response, requestCt);
         });
 
         return app;
     }
 
     /// <summary>
-    /// Resolves an explicit "provider/model" hint from the request id to a
-    /// <see cref="ProviderInfo"/>. Returns null when the hint is absent, ambiguous,
-    /// or points at a provider the registry does not know about.
+    /// Emits the structured routing decision. Never logs message content, headers,
+    /// or API keys.
     /// </summary>
-    private static ProviderInfo? ExtractProviderHint(string? requestedModel, ProviderRegistry providerRegistry)
+    private static void LogRouting(ILogger logger, ResolvedRoute route)
     {
-        if (string.IsNullOrWhiteSpace(requestedModel))
-            return null;
-
-        int slash = requestedModel.IndexOf('/');
-        if (slash <= 0 || slash >= requestedModel.Length - 1)
-            return null;
-
-        string providerHint = requestedModel[..slash];
-        foreach (ProviderInfo prov in providerRegistry.Providers)
+        if (route.Error != RouteErrorKind.None)
         {
-            if (string.Equals(prov.Name, providerHint, StringComparison.OrdinalIgnoreCase))
-                return prov;
+            logger.LogWarning(
+                "[Routing] RequestedModel={RequestedModel} NormalizedModel={NormalizedModel} ProviderHint={ProviderHint} Error={Error} Message={Message}",
+                route.RequestedModel, route.NormalizedModel, route.ProviderHint ?? "(none)", route.Error, route.ErrorMessage);
+            return;
         }
 
-        return null;
+        string primaryProvider = route.Candidates.Count > 0 ? route.Candidates[0].Provider.Name : "(none)";
+        string primaryUpstream = route.Candidates.Count > 0 ? route.Candidates[0].UpstreamModel : "(none)";
+        string baseUrl = route.Candidates.Count > 0 ? route.Candidates[0].Provider.BaseUrl : "(none)";
+
+        logger.LogInformation(
+            "[Routing] RequestedModel={RequestedModel} NormalizedModel={NormalizedModel} ResolvedModel={ResolvedModel} ProviderHint={ProviderHint} Candidates={CandidateCount} ResolvedProvider={ResolvedProvider} UpstreamModel={UpstreamModel} BaseUrl={BaseUrl} FallbackUsed={FallbackUsed}",
+            route.RequestedModel, route.NormalizedModel, route.Model, route.ProviderHint ?? "(none)", route.Candidates.Count,
+            primaryProvider, primaryUpstream, baseUrl, route.FallbackUsed);
+    }
+
+    /// <summary>
+    /// Emits an upstream failure with a masked key identifier, body length and
+    /// elapsed time. The full Authorization header / API key is never logged.
+    /// </summary>
+    private static void LogUpstreamError(
+        ILogger logger,
+        ProviderInfo provider,
+        string upstreamModel,
+        int? statusCode,
+        long startedTimestamp,
+        string? body)
+    {
+        logger.LogWarning(
+            "[UpstreamError] Provider={Provider} UpstreamModel={UpstreamModel} Status={Status} ElapsedMs={ElapsedMs} Key={KeyId} BodyLength={BodyLength}",
+            provider.Name,
+            upstreamModel,
+            statusCode?.ToString() ?? "(transport)",
+            (long)Stopwatch.GetElapsedTime(startedTimestamp).TotalMilliseconds,
+            MaskApiKey(provider.ApiKey),
+            body?.Length ?? 0);
+    }
+
+    private static string MaskApiKey(string? apiKey)
+    {
+        if (string.IsNullOrEmpty(apiKey))
+        {
+            return "(none)";
+        }
+
+        return apiKey.Length <= 8 ? "****" : $"{apiKey[..4]}****{apiKey[^4..]}";
     }
 
     /// <summary>
