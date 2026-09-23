@@ -29,7 +29,7 @@ public class RequestTransformerTests
     }
 
     [Fact]
-    public void ModifyRequest_InjectsCachedReasoningContentForAssistantMessage()
+    public void ModifyRequest_DoesNotLeakOtherSessionCachedReasoning()
     {
         RequestTransformer sut = CreateTransformer(out ReasoningCacheService cache);
         cache.Set("assistant:0", "cached reasoning");
@@ -45,10 +45,7 @@ public class RequestTransformerTests
 
         string? result = sut.ModifyRequest(request);
 
-        Assert.NotNull(result);
-        using JsonDocument modified = JsonDocument.Parse(result!);
-        JsonElement msg = modified.RootElement.GetProperty("messages")[0];
-        Assert.Equal("cached reasoning", msg.GetProperty("reasoning_content").GetString());
+        Assert.Null(result);
     }
 
     [Fact]
@@ -346,7 +343,7 @@ public class RequestTransformerTests
     }
 
     [Fact]
-    public void ModifyRequest_InjectsReasoningForToolCallKey()
+    public void ModifyRequest_DoesNotTrustClientControlledToolCallCacheKey()
     {
         RequestTransformer sut = CreateTransformer(out ReasoningCacheService cache);
         cache.Set("toolcall:call_1", "tool reasoning");
@@ -368,14 +365,11 @@ public class RequestTransformerTests
 
         string? result = sut.ModifyRequest(request);
 
-        Assert.NotNull(result);
-        using JsonDocument modified = JsonDocument.Parse(result!);
-        JsonElement msg = modified.RootElement.GetProperty("messages")[0];
-        Assert.Equal("tool reasoning", msg.GetProperty("reasoning_content").GetString());
+        Assert.Null(result);
     }
 
     [Fact]
-    public void ModifyRequest_InjectsReasoningForAssistantMessagesInOrder()
+    public void ModifyRequest_DoesNotInjectGlobalSequenceReasoning()
     {
         RequestTransformer sut = CreateTransformer(out ReasoningCacheService cache);
         cache.Set("assistant:0", "first reasoning");
@@ -393,15 +387,11 @@ public class RequestTransformerTests
 
         string? result = sut.ModifyRequest(request);
 
-        Assert.NotNull(result);
-        using JsonDocument modified = JsonDocument.Parse(result!);
-        JsonElement messages = modified.RootElement.GetProperty("messages");
-        Assert.Equal("first reasoning", messages[0].GetProperty("reasoning_content").GetString());
-        Assert.Equal("second reasoning", messages[1].GetProperty("reasoning_content").GetString());
+        Assert.Null(result);
     }
 
     [Fact]
-    public void ModifyRequest_PreservesCachedReasoningOnEmptyAssistantMessage()
+    public void ModifyRequest_RemovesEmptyAssistantDespiteUnrelatedCachedReasoning()
     {
         RequestTransformer sut = CreateTransformer(out ReasoningCacheService cache);
         cache.Set("assistant:0", "cached reasoning");
@@ -419,9 +409,7 @@ public class RequestTransformerTests
 
         Assert.NotNull(result);
         using JsonDocument modified = JsonDocument.Parse(result!);
-        JsonElement message = modified.RootElement.GetProperty("messages")[0];
-        Assert.Equal("cached reasoning", message.GetProperty("reasoning_content").GetString());
-        Assert.Equal("", message.GetProperty("content").GetString());
+        Assert.Empty(modified.RootElement.GetProperty("messages").EnumerateArray());
     }
 
     [Fact]
@@ -527,6 +515,27 @@ public class RequestTransformerTests
 
         using JsonDocument doc = JsonDocument.Parse(result);
         Assert.False(doc.RootElement.TryGetProperty("reasoning_effort", out _));
+    }
+
+    [Theory]
+    [InlineData("unknown-model-without-config", "deepseek")]
+    [InlineData("kimi-for-coding", "kimicode")]
+    public void ApplyExecutionDefaults_FiltersTopKWithoutSamplingDefaults(string model, string provider)
+    {
+        string result = CreateTransformer().ApplyExecutionDefaults(
+            """{"messages":[],"top_k":20,"temperature":0.2,"reasoning_effort":"low"}""",
+            model, ProviderCapabilitiesRegistry.Get(provider), provider);
+        using JsonDocument doc = JsonDocument.Parse(result);
+        Assert.False(doc.RootElement.TryGetProperty("top_k", out _));
+        Assert.Equal(0.2, doc.RootElement.GetProperty("temperature").GetDouble());
+        Assert.Equal("low", doc.RootElement.GetProperty("reasoning_effort").GetString());
+    }
+
+    [Fact]
+    public void ModifyRequest_PreservesClientReasoningWithoutText()
+    {
+        using JsonDocument doc = JsonDocument.Parse("""{"messages":[{"role":"assistant","content":"","reasoning_content":"own reasoning"}]}""");
+        Assert.Null(CreateTransformer().ModifyRequest(doc));
     }
 
     private static RequestTransformer CreateTransformer()

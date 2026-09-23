@@ -256,13 +256,12 @@ Validates that `ProviderRegistry`, `ModelSelectionStore`, and `ModelCatalogServi
 
 Tests the `RequestTransformer` class:
 - Default injection (`temperature`, `top_p`, `max_tokens`, `reasoning_effort`) for missing fields
-- Per-provider filtering (`top_k` removed for OpenAI/DeepSeek/Moonshot; `reasoning_effort` only for DeepSeek/OpenAI o-series)
+- Per-provider filtering (`top_k` removed when unsupported; configured defaults obey capability flags while client `reasoning_effort` remains intact)
 - Native reasoner detection (skip `top_p` when `reasoning_effort` is set)
-- `reasoning_content` re-injection for multi-turn conversations
+- Cached reasoning is never injected into unrelated history; client-provided reasoning is preserved
 - Empty assistant-message cleanup
-- Streaming format conversion (SSE ↔ NDJSON)
 
-The 25 tests in this file cover: `ReplaceModelInRequestBody`, `ModifyRequest` (assistant message handling + reasoning cache), and `ApplyExecutionDefaults` (all the parameter injection rules above).
+These tests cover `ReplaceModelInRequestBody`, `ModifyRequest` and `ApplyExecutionDefaults`. `ProtocolRepairTests` and `ProtocolEndpointRegressionTests` exercise production streaming and protocol conversion. See [audit repair checks](testing/2026-09-17-audit-repair.md) for the reproducible runtime probe.
 
 ---
 
@@ -324,11 +323,12 @@ The shared `ProxyFixture` collection:
 
 2. **Points environment variables at the stub**
    - `PROVIDER_DEEPSEEK_BASE_URL` → local stub
-   - Other providers → real URLs (or cleared in test env so only deepseek is discovered)
+   - All inherited `PROVIDER_`, `DEEPSEEK_`, `PROXY_`, `BENCHMARK_` variables are cleared and restored on fixture disposal
 
 3. **Creates a `WebApplicationFactory<Program>` for the proxy**
    - Real ASP.NET Core middleware pipeline
    - Full end-to-end testing with the actual DI graph
+   - `Testing` skips `.env`; a dedicated HTTP handler only accepts the local stub address and disables redirects
 
 ### Test Isolation Pattern
 
@@ -530,9 +530,9 @@ name: Test Suite
 
 on:
   push:
-    branches: [develop, 'feature/**']
+    branches: [main]
   pull_request:
-    branches: [develop]
+    branches: [main]
 
 jobs:
   test:
@@ -566,7 +566,7 @@ jobs:
           path: '**/TestResults/**'
 ```
 
-> Note: `main` is the protected release branch and is NOT triggered by this CI.
+> The checked-in .NET workflow runs on pushes and pull requests targeting `main`. Test counts change; the runner summary is authoritative.
 
 ### Pre-commit Hook
 

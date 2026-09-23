@@ -5,6 +5,31 @@ namespace ProxyTests;
 public class ProviderHttpClientFactoryTests
 {
     [Fact]
+    public async Task Dispose_ReleasesOwnedClientsAndHandlerOnce()
+    {
+        TrackingHandler handler = new();
+        ProviderHttpClientFactory factory = new(handler);
+        HttpClient client = factory.CreateProviderClient("test", "http://offline.test", "synthetic");
+        factory.Dispose();
+        factory.Dispose();
+        Assert.Equal(1, handler.DisposeCount);
+        await Assert.ThrowsAsync<ObjectDisposedException>(() => client.GetAsync("test"));
+        Assert.Throws<ObjectDisposedException>(() => factory.CreateProviderClient("test", "http://offline.test", "synthetic"));
+    }
+
+    private sealed class TrackingHandler : HttpMessageHandler
+    {
+        public int DisposeCount { get; private set; }
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct) =>
+            throw new InvalidOperationException("No network expected");
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing) DisposeCount++;
+            base.Dispose(disposing);
+        }
+    }
+
+    [Fact]
     public void CreateProviderClient_SetsBaseAddress()
     {
         ProviderHttpClientFactory factory = new();

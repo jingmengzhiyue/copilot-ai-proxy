@@ -132,7 +132,11 @@ Write-Host "`n========== DUPLICATE ANALYSIS (Bare Model Names) ==========" -Fore
 $duplicates = $results | Group-Object Model | Where-Object { $_.Count -gt 1 }
 foreach ($group in $duplicates) {
     Write-Host "`nModel: $($group.Name)" -ForegroundColor Yellow
-    $sorted = $group.Group | Sort-Object AvgLatencyMs
+    $sorted = @($group.Group | Where-Object { $_.SuccessCount -gt 0 -and $_.AvgLatencyMs -ge 0 } | Sort-Object AvgLatencyMs)
+    if ($sorted.Count -eq 0) {
+        Write-Host "  NO AVAILABLE RESULT (all probes failed)" -ForegroundColor Red
+        continue
+    }
     $fastest = $sorted | Select-Object -First 1
     Write-Host "  FASTEST: $($fastest.QualifiedName) via $($fastest.Provider) - $($fastest.AvgLatencyMs)ms" -ForegroundColor Green
     foreach ($r in $sorted | Select-Object -Skip 1) {

@@ -1,30 +1,17 @@
 [assembly: System.Runtime.CompilerServices.InternalsVisibleTo("ProxyTests")]
 
-// Cargar .env automáticamente si existe
-string envPath = Path.Combine(AppContext.BaseDirectory, ".env");
-if (!File.Exists(envPath))
-{
-    envPath = Path.Combine(Directory.GetCurrentDirectory(), ".env");
-}
-if (File.Exists(envPath))
-{
-    Console.WriteLine($"📄 Loading configuration from: {envPath}");
-    foreach (string line in File.ReadAllLines(envPath))
-    {
-        string trimmed = line.Trim();
-        if (trimmed.Length == 0 || trimmed.StartsWith("#"))
-            continue;
-        int eq = trimmed.IndexOf('=');
-        if (eq < 1)
-            continue;
-        string key = trimmed[..eq].Trim();
-        string value = trimmed[(eq + 1)..].Trim().Trim('"');
-        if (!string.IsNullOrEmpty(key))
-            Environment.SetEnvironmentVariable(key, value);
-    }
-}
-
 WebApplicationBuilder builder = WebApplication.CreateSlimBuilder(args);
+DotEnvLoader.Load(AppContext.BaseDirectory, Directory.GetCurrentDirectory(), builder.Environment.IsEnvironment("Testing"));
+
+// Keep framework warnings/errors while replacing repetitive lifecycle information
+// with one application-level model-request summary.
+builder.Logging.AddFilter("Microsoft.AspNetCore.Hosting.Diagnostics", LogLevel.Warning);
+builder.Logging.AddFilter("Microsoft.AspNetCore.Routing.EndpointMiddleware", LogLevel.Warning);
+builder.Logging.AddSimpleConsole(options =>
+{
+    options.SingleLine = true;
+    options.TimestampFormat = "HH:mm:ss ";
+});
 
 int port = int.TryParse(Environment.GetEnvironmentVariable("PROXY_PORT"), out int p) ? p : 11434;
 string? proxyApiKey = Environment.GetEnvironmentVariable("PROXY_API_KEY");
@@ -41,13 +28,14 @@ builder.Services.AddSingleton<OllamaResponseBuilder>();
 builder.Services.AddSingleton<ChatStreamingService>();
 
 builder.Services.AddHostedService<ProviderBenchmarkService>();
+builder.Services.AddHostedService<ModelCatalogRefreshService>();
 
 WebApplication app = builder.Build();
+app.UseModelRequestLogging();
 app.UseOptionalProxyAuthentication(proxyApiKey);
 
 ModelCatalogService modelCatalog = app.Services.GetRequiredService<ModelCatalogService>();
 ProviderRegistry providerRegistry = app.Services.GetRequiredService<ProviderRegistry>();
-await modelCatalog.RefreshAvailableModels(CancellationToken.None);
 
 app.MapOpenAiEndpoints();
 app.MapOllamaEndpoints();

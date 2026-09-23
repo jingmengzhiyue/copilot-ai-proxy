@@ -1,5 +1,8 @@
 internal sealed class ProviderRegistry
 {
+    // Publication and a complete routing decision share this short-lived gate.
+    internal object CatalogSync { get; } = new();
+
     private readonly List<ProviderInfo> _providers = [];
     private Dictionary<string, ProviderInfo> _modelToProvider = new(StringComparer.OrdinalIgnoreCase);
     private Dictionary<string, string> _modelToUpstream = new(StringComparer.OrdinalIgnoreCase);
@@ -37,6 +40,15 @@ internal sealed class ProviderRegistry
         Dictionary<string, ProviderInfo> modelToProvider,
         Dictionary<string, string> modelToUpstream,
         Dictionary<string, List<ProviderInfo>>? upstreamToProviders = null)
+    {
+        lock (CatalogSync)
+            UpdateModelMappingsCore(modelToProvider, modelToUpstream, upstreamToProviders);
+    }
+
+    private void UpdateModelMappingsCore(
+        Dictionary<string, ProviderInfo> modelToProvider,
+        Dictionary<string, string> modelToUpstream,
+        Dictionary<string, List<ProviderInfo>>? upstreamToProviders)
     {
         _modelToProvider = modelToProvider;
         _modelToUpstream = modelToUpstream;
@@ -95,6 +107,12 @@ internal sealed class ProviderRegistry
     /// is unknown, so callers can distinguish "resolved" from "fell back to default".
     /// </summary>
     internal bool TryResolveCatalogModel(string? requestedModel, out string resolved)
+    {
+        lock (CatalogSync)
+            return TryResolveCatalogModelCore(requestedModel, out resolved);
+    }
+
+    private bool TryResolveCatalogModelCore(string? requestedModel, out string resolved)
     {
         resolved = DefaultModel;
         if (_providers.Count == 0)
@@ -184,8 +202,11 @@ internal sealed class ProviderRegistry
 
     internal string ResolveUpstreamModel(string? requestedModel)
     {
-        string resolved = ResolveModel(requestedModel);
-        return _modelToUpstream.TryGetValue(resolved, out string? upstream) ? upstream : resolved;
+        lock (CatalogSync)
+        {
+            string resolved = ResolveModel(requestedModel);
+            return _modelToUpstream.TryGetValue(resolved, out string? upstream) ? upstream : resolved;
+        }
     }
 
     /// <summary>
@@ -194,6 +215,12 @@ internal sealed class ProviderRegistry
     /// A bare model id returns every provider that offers it, ordered by configured priority.
     /// </summary>
     internal IReadOnlyList<(ProviderInfo Provider, string UpstreamModel)> ResolveCandidates(string? requestedModel)
+    {
+        lock (CatalogSync)
+            return ResolveCandidatesCore(requestedModel);
+    }
+
+    private IReadOnlyList<(ProviderInfo Provider, string UpstreamModel)> ResolveCandidatesCore(string? requestedModel)
     {
         string resolved = ResolveModel(requestedModel);
         string upstream = _modelToUpstream.TryGetValue(resolved, out string? up) ? up : resolved;
@@ -259,15 +286,14 @@ internal sealed class ProviderRegistry
         // register a second "ollama" entry that works without an API key.
         string? ollamaBaseUrl = Environment.GetEnvironmentVariable("PROVIDER_OLLAMA_BASE_URL");
         if (!string.IsNullOrWhiteSpace(ollamaBaseUrl)
-            && (ollamaBaseUrl.Contains("localhost", StringComparison.OrdinalIgnoreCase)
-                || ollamaBaseUrl.Contains("127.0.0.1")
-                || ollamaBaseUrl.Contains("::1"))
+            && Uri.TryCreate(ollamaBaseUrl, UriKind.Absolute, out Uri? localUri) && localUri.IsLoopback
             && !_providers.Any(p => p.BaseUrl.Equals(ollamaBaseUrl, StringComparison.OrdinalIgnoreCase)))
         {
             ProviderCapabilities ollamaCaps = ProviderCapabilitiesRegistry.Get("ollama");
             ollamaBaseUrl = NormalizeBaseUrl(ollamaBaseUrl, ollamaCaps);
-            HttpClient localClient = httpClientFactory.CreateProviderClient("ollama", ollamaBaseUrl, apiKey: "");
-            _providers.Add(new ProviderInfo("ollama", "", ollamaBaseUrl, localClient, ollamaCaps));
+            string localName = _providers.Any(p => p.Name == "ollama") ? "ollama-local" : "ollama";
+            HttpClient localClient = httpClientFactory.CreateProviderClient(localName, ollamaBaseUrl, apiKey: "");
+            _providers.Add(new ProviderInfo(localName, "", ollamaBaseUrl, localClient, ollamaCaps));
         }
 
         // ── Legacy DEEPSEEK_API_KEY fallback ────────────────────────────
@@ -293,14 +319,13 @@ internal sealed class ProviderRegistry
     private static string NormalizeBaseUrl(string baseUrl, ProviderCapabilities caps)
     {
         string trimmed = baseUrl.TrimEnd('/');
-        string? firstSegment = caps.ChatPath
-            .Split('/', StringSplitOptions.RemoveEmptyEntries)
-            .FirstOrDefault();
-
-        if (firstSegment is not null
-            && trimmed.EndsWith($"/{firstSegment}", StringComparison.OrdinalIgnoreCase))
+        string[] segments = caps.ChatPath.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        // Match the longest API prefix first (Google uses v1beta/openai).
+        for (int count = segments.Length - 1; count > 0; count--)
         {
-            return trimmed[..(trimmed.Length - firstSegment.Length - 1)];
+            string prefix = string.Join('/', segments.Take(count));
+            if (trimmed.EndsWith($"/{prefix}", StringComparison.OrdinalIgnoreCase))
+                return trimmed[..^(prefix.Length + 1)];
         }
 
         return trimmed;

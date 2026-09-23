@@ -4,6 +4,8 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Xunit;
 
 namespace ProxyTests;
@@ -40,11 +42,22 @@ public sealed class ProxyFixture : IDisposable
 
     private readonly WebApplication _stub;
     private readonly WebApplicationFactory<Program> _factory;
+    private readonly Dictionary<string, string?> _environment = new(StringComparer.OrdinalIgnoreCase);
 
     public HttpClient Client { get; }
 
     public ProxyFixture()
     {
+        // Discover keys by namespace rather than maintaining an incomplete provider list.
+        foreach (System.Collections.DictionaryEntry entry in Environment.GetEnvironmentVariables())
+        {
+            string key = (string)entry.Key;
+            if (IsProxyVariable(key))
+            {
+                _environment[key] = (string?)entry.Value;
+                Environment.SetEnvironmentVariable(key, null);
+            }
+        }
         // 1. Build and start the provider stub
         WebApplicationBuilder sb = WebApplication.CreateSlimBuilder();
         sb.WebHost.UseUrls("http://127.0.0.1:0");
@@ -73,21 +86,17 @@ public sealed class ProxyFixture : IDisposable
         // 2. Set env vars so the proxy's top-level startup reads them
         Environment.SetEnvironmentVariable("PROVIDER_DEEPSEEK_API_KEY", "fake-test-key");
         Environment.SetEnvironmentVariable("PROVIDER_DEEPSEEK_BASE_URL", stubUrl);
-        // Clear any provider keys that might be set in the host environment
-        Environment.SetEnvironmentVariable("PROVIDER_NVIDIA_API_KEY", null);
-        Environment.SetEnvironmentVariable("PROVIDER_OPENAI_API_KEY", null);
-        Environment.SetEnvironmentVariable("PROVIDER_OPENROUTER_API_KEY", null);
-        Environment.SetEnvironmentVariable("PROVIDER_GROQ_API_KEY", null);
-        Environment.SetEnvironmentVariable("PROVIDER_OLLAMACLOUD_API_KEY", null);
-        Environment.SetEnvironmentVariable("PROVIDER_KIMI_API_KEY", null);
-        Environment.SetEnvironmentVariable("PROVIDER_KIMI_BASE_URL", null);
-        Environment.SetEnvironmentVariable("PROVIDER_KIMICODE_API_KEY", null);
-        Environment.SetEnvironmentVariable("PROVIDER_KIMICODE_BASE_URL", null);
-        Environment.SetEnvironmentVariable("DEEPSEEK_API_KEY", null);
 
         // 3. Start the proxy via WebApplicationFactory
         _factory = new WebApplicationFactory<Program>()
-            .WithWebHostBuilder(b => b.UseSetting("ASPNETCORE_ENVIRONMENT", "Testing"));
+            .WithWebHostBuilder(b =>
+            {
+                b.UseEnvironment("Testing");
+                // A second boundary prevents accidental external traffic even if
+                // future startup code introduces another configuration source.
+                b.ConfigureServices(services => services.Replace(ServiceDescriptor.Singleton(
+                    _ => new ProviderHttpClientFactory(new StubOnlyHandler(new Uri(stubUrl))))));
+            });
 
         Client = _factory.CreateClient();
     }
@@ -98,6 +107,28 @@ public sealed class ProxyFixture : IDisposable
         _factory.Dispose();
         _stub.StopAsync().GetAwaiter().GetResult();
         _stub.DisposeAsync().GetAwaiter().GetResult();
+        foreach (System.Collections.DictionaryEntry entry in Environment.GetEnvironmentVariables())
+        {
+            string key = (string)entry.Key;
+            if (IsProxyVariable(key))
+                Environment.SetEnvironmentVariable(key, null);
+        }
+        foreach ((string key, string? value) in _environment)
+            Environment.SetEnvironmentVariable(key, value);
+    }
+
+    private static bool IsProxyVariable(string key) => new[] { "PROVIDER_", "DEEPSEEK_", "PROXY_", "BENCHMARK_" }
+        .Any(prefix => key.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
+
+    private sealed class StubOnlyHandler(Uri stub) : DelegatingHandler(new HttpClientHandler { AllowAutoRedirect = false })
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            if (request.RequestUri is not Uri target || target.Scheme != stub.Scheme ||
+                target.Host != stub.Host || target.Port != stub.Port)
+                throw new InvalidOperationException("Test request attempted to leave its loopback stub.");
+            return base.SendAsync(request, cancellationToken);
+        }
     }
 }
 

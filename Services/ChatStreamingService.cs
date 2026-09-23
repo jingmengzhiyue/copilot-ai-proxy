@@ -1,260 +1,134 @@
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 
 internal sealed class ChatStreamingService
 {
-    private readonly ReasoningCacheService _reasoningCacheService;
-
-    public ChatStreamingService(ReasoningCacheService reasoningCacheService)
-    {
-        _reasoningCacheService = reasoningCacheService;
-    }
+    // Kept for existing DI registrations. Requests have no trustworthy session key,
+    // so forwarding must never persist reasoning for another request to recover.
+    public ChatStreamingService(ReasoningCacheService reasoningCacheService) { }
 
     internal async Task StreamAndCache(HttpResponseMessage upstream, HttpResponse downstream, CancellationToken ct)
     {
-        try
+        using Stream stream = await upstream.Content.ReadAsStreamAsync(ct);
+        using StreamReader reader = new(stream);
+        bool completed = false;
+        while (await reader.ReadLineAsync(ct) is { } line)
         {
-            using Stream upstreamStream = await upstream.Content.ReadAsStreamAsync(ct);
-            using StreamReader reader = new(upstreamStream);
-            await using StreamWriter writer = new(downstream.Body, leaveOpen: true) { NewLine = "\n" };
-
-            StringBuilder sb = new(4096);
-            List<string>? tcIds = null;
-            bool hasTc = false;
-            string? assistantKey = null;
-            bool receivedData = false;
-
-            while (true)
+            if (line.StartsWith("data:"))
             {
-                string? line;
-                try
+                string json = line[5..].TrimStart();
+                if (json == "[DONE]") completed = true;
+                else if (json.Length > 0)
                 {
-                    line = await reader.ReadLineAsync(ct);
+                    using var doc = JsonDocument.Parse(json);
+                    var root = doc.RootElement;
+                    if (root.TryGetProperty("error", out _)) throw new IOException("Upstream stream reported an error.");
+                    if (root.TryGetProperty("choices", out var choices) && choices.ValueKind == JsonValueKind.Array)
+                        completed |= choices.EnumerateArray().Any(c => c.TryGetProperty("finish_reason", out var finish) && finish.ValueKind == JsonValueKind.String);
                 }
-                catch (HttpIOException) when (receivedData)
-                {
-                    // Upstream closed the connection after we already sent data.
-                    // This is a normal end of stream — break gracefully.
-                    break;
-                }
-
-                if (line == null) break;
-                receivedData = true;
-
-                if (line.StartsWith("data:"))
-                {
-                    string json = line.Substring(5).TrimStart();
-                    if (json.Length > 0 && json != "[DONE]")
-                    {
-                        try
-                        {
-                            using JsonDocument chunk = JsonDocument.Parse(json);
-                            JsonElement cr = chunk.RootElement;
-                            if (cr.TryGetProperty("choices", out JsonElement choices) && choices.GetArrayLength() > 0)
-                            {
-                                JsonElement delta = choices[0].TryGetProperty("delta", out JsonElement d) ? d
-                                    : choices[0].TryGetProperty("message", out JsonElement mm) ? mm : default;
-
-                                if (delta.ValueKind != JsonValueKind.Undefined)
-                                {
-                                    if (delta.TryGetProperty("reasoning_content", out JsonElement rc) && rc.ValueKind == JsonValueKind.String)
-                                    {
-                                        string? rct = rc.GetString();
-                                        if (!string.IsNullOrEmpty(rct)) sb.Append(rct);
-                                    }
-
-                                    if (delta.TryGetProperty("tool_calls", out JsonElement tcs) && tcs.ValueKind == JsonValueKind.Array)
-                                    {
-                                        hasTc = true;
-                                        foreach (JsonElement tc in tcs.EnumerateArray())
-                                        {
-                                            if (tc.TryGetProperty("id", out JsonElement idE) && idE.ValueKind == JsonValueKind.String)
-                                            {
-                                                tcIds ??= [];
-                                                string id = idE.GetString()!;
-                                                if (!tcIds.Contains(id)) tcIds.Add(id);
-                                            }
-                                        }
-                                    }
-
-                                    if (choices[0].TryGetProperty("finish_reason", out JsonElement fr) && fr.ValueKind != JsonValueKind.Null)
-                                    {
-                                        string reasoning = sb.ToString();
-                                        if (!string.IsNullOrEmpty(reasoning))
-                                        {
-                                            string key;
-                                            if (hasTc && tcIds != null && tcIds.Count > 0)
-                                                key = $"toolcall:{string.Join("|", tcIds)}";
-                                            else
-                                                key = assistantKey ??= _reasoningCacheService.NextAssistantKey();
-
-                                            _reasoningCacheService.Set(key, reasoning);
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        catch
-                        {
-                            // parse errors are non-critical
-                        }
-
-                        await writer.WriteAsync("data: ");
-                        await writer.WriteAsync(json);
-                        await writer.WriteLineAsync();
-                    }
-                    else
-                    {
-                        await writer.WriteLineAsync(line);
-                    }
-                }
-                else
-                {
-                    await writer.WriteLineAsync(line);
-                }
-
-                await writer.FlushAsync(ct);
             }
+            await downstream.WriteAsync(line + "\n", ct);
+            await downstream.Body.FlushAsync(ct);
+            if (line.StartsWith("data:") && line[5..].Trim() == "[DONE]") return;
         }
-        catch (HttpIOException)
-        {
-            // Upstream connection dropped before any data was received.
-            // The 200 header was already sent to the client, so we cannot switch
-            // to a JSON error response. Simply end the stream — the client will
-            // see an incomplete response and will retry automatically.
-        }
+        if (!completed) throw new IOException("Upstream stream ended before completion.");
     }
 
     internal async Task StreamNdjsonPassthrough(HttpResponseMessage upstream, HttpResponse downstream, CancellationToken ct)
     {
-        using Stream upstreamStream = await upstream.Content.ReadAsStreamAsync(ct);
-        using StreamReader reader = new(upstreamStream);
-        await using StreamWriter writer = new(downstream.Body, leaveOpen: true) { NewLine = "\n" };
-
-        while (true)
+        using Stream stream = await upstream.Content.ReadAsStreamAsync(ct);
+        using StreamReader reader = new(stream);
+        bool completed = false;
+        while (await reader.ReadLineAsync(ct) is { } line)
         {
-            string? line = await reader.ReadLineAsync(ct);
-            if (line == null)
-            {
-                break;
-            }
-
-            await writer.WriteLineAsync(line);
-            await writer.FlushAsync(ct);
+            if (string.IsNullOrWhiteSpace(line)) continue;
+            using var doc = JsonDocument.Parse(line);
+            if (doc.RootElement.TryGetProperty("error", out _)) throw new IOException("Upstream stream reported an error.");
+            completed |= doc.RootElement.TryGetProperty("done", out var done) && done.ValueKind == JsonValueKind.True;
+            await downstream.WriteAsync(line + "\n", ct);
+            await downstream.Body.FlushAsync(ct);
+            if (completed) return;
         }
+        if (!completed) throw new IOException("Upstream stream ended before completion.");
     }
 
     internal async Task StreamOllamaAndCache(HttpResponseMessage upstream, HttpResponse downstream, string model, CancellationToken ct)
     {
-        using Stream upstreamStream = await upstream.Content.ReadAsStreamAsync(ct);
-        using StreamReader reader = new(upstreamStream);
-        await using StreamWriter writer = new(downstream.Body, leaveOpen: true) { NewLine = "\n" };
-
-        StringBuilder reasoningSb = new(4096);
-        List<string>? tcIds = null;
-        bool hasTc = false;
+        using Stream stream = await upstream.Content.ReadAsStreamAsync(ct);
+        using StreamReader reader = new(stream);
+        bool completed = false;
         string finishReason = "stop";
-
-        while (true)
+        // OpenAI sends arguments as arbitrary fragments, potentially interleaved by
+        // index. Ollama clients may execute calls immediately, so emit only complete objects.
+        var calls = new SortedDictionary<int, (StringBuilder Name, StringBuilder Arguments)>();
+        while (await reader.ReadLineAsync(ct) is { } line)
         {
-            string? line = await reader.ReadLineAsync(ct);
-            if (line == null) break;
             if (!line.StartsWith("data:")) continue;
-
-            string json = line.Substring(5).TrimStart();
-            if (json.Length == 0 || json == "[DONE]") continue;
-
-            string? contentDelta = null;
-            JsonElement? toolCallsDelta = null;
-            try
+            string json = line[5..].TrimStart();
+            if (json.Length == 0) continue;
+            if (json == "[DONE]") { completed = true; break; }
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+            if (root.TryGetProperty("error", out _)) throw new IOException("Upstream stream reported an error.");
+            if (!root.TryGetProperty("choices", out var choices) || choices.ValueKind != JsonValueKind.Array)
+                throw new JsonException("Missing upstream choices.");
+            if (choices.GetArrayLength() == 0) continue; // Usage-only chunk.
+            var choice = choices[0];
+            var delta = choice.TryGetProperty("delta", out var d) ? d : choice.TryGetProperty("message", out var m) ? m : default;
+            if (delta.ValueKind == JsonValueKind.Object)
             {
-                using JsonDocument chunk = JsonDocument.Parse(json);
-                JsonElement cr = chunk.RootElement;
-                if (cr.TryGetProperty("choices", out JsonElement choices) && choices.GetArrayLength() > 0)
+                if (delta.TryGetProperty("tool_calls", out var tools))
+                foreach (var call in tools.EnumerateArray())
                 {
-                    JsonElement choice0 = choices[0];
-                    JsonElement delta = choice0.TryGetProperty("delta", out JsonElement d) ? d
-                        : choice0.TryGetProperty("message", out JsonElement mm) ? mm : default;
-
-                    if (delta.ValueKind != JsonValueKind.Undefined)
+                    int index = 0;
+                    if (call.TryGetProperty("index", out var idx)
+                        && (idx.ValueKind != JsonValueKind.Number || !idx.TryGetInt32(out index) || index < 0))
+                        throw new JsonException("Invalid upstream tool call index.");
+                    if (!calls.TryGetValue(index, out var pending))
                     {
-                        if (delta.TryGetProperty("content", out JsonElement ce) && ce.ValueKind == JsonValueKind.String)
-                            contentDelta = ce.GetString();
-
-                        if (delta.TryGetProperty("reasoning_content", out JsonElement rc) && rc.ValueKind == JsonValueKind.String)
-                        {
-                            string? rct = rc.GetString();
-                            if (!string.IsNullOrEmpty(rct)) reasoningSb.Append(rct);
-                        }
-
-                        if (delta.TryGetProperty("tool_calls", out JsonElement tcs) && tcs.ValueKind == JsonValueKind.Array)
-                        {
-                            hasTc = true;
-                            toolCallsDelta = tcs.Clone();
-                            foreach (JsonElement tc in tcs.EnumerateArray())
-                            {
-                                if (tc.TryGetProperty("id", out JsonElement idE) && idE.ValueKind == JsonValueKind.String)
-                                {
-                                    tcIds ??= [];
-                                    string id = idE.GetString()!;
-                                    if (!tcIds.Contains(id)) tcIds.Add(id);
-                                }
-                            }
-                        }
+                        pending = (new StringBuilder(), new StringBuilder());
+                        calls.Add(index, pending);
                     }
-
-                    if (choice0.TryGetProperty("finish_reason", out JsonElement fr) && fr.ValueKind == JsonValueKind.String)
-                    {
-                        finishReason = fr.GetString() ?? "stop";
-                        string reasoning = reasoningSb.ToString();
-                        if (!string.IsNullOrEmpty(reasoning))
-                        {
-                            string key = hasTc && tcIds != null && tcIds.Count > 0
-                                ? $"toolcall:{string.Join("|", tcIds)}"
-                                : _reasoningCacheService.NextAssistantKey();
-                            _reasoningCacheService.Set(key, reasoning);
-                        }
-                    }
+                    if (!call.TryGetProperty("function", out var function)) continue;
+                    if (function.TryGetProperty("name", out var name)) pending.Name.Append(name.GetString());
+                    if (function.TryGetProperty("arguments", out var args)) pending.Arguments.Append(args.GetString());
                 }
+                var message = new JsonObject { ["role"] = "assistant", ["content"] = "" };
+                bool hasOutput = false;
+                if (delta.TryGetProperty("content", out var content) && content.ValueKind == JsonValueKind.String)
+                { message["content"] = content.GetString(); hasOutput = true; }
+                if (delta.TryGetProperty("reasoning_content", out var reasoning) && reasoning.ValueKind == JsonValueKind.String)
+                { message["thinking"] = reasoning.GetString(); hasOutput = true; }
+                if (hasOutput) await WriteOllamaChunk(downstream, model, message, false, null, ct);
             }
-            catch
+            if (choice.TryGetProperty("finish_reason", out var finish) && finish.ValueKind == JsonValueKind.String)
             {
-                continue;
+                finishReason = finish.GetString() ?? "stop";
+                completed = true;
             }
-
-            if (contentDelta == null && toolCallsDelta == null) continue;
-
-            Dictionary<string, object?> message = new()
-            {
-                ["role"] = "assistant",
-                ["content"] = contentDelta ?? ""
-            };
-            if (toolCallsDelta != null)
-                message["tool_calls"] = toolCallsDelta.Value;
-
-            Dictionary<string, object?> ndjson = new()
-            {
-                ["model"] = model,
-                ["created_at"] = DateTime.UtcNow.ToString("o"),
-                ["message"] = message,
-                ["done"] = false
-            };
-
-            await writer.WriteAsync(JsonSerializer.Serialize(ndjson, JsonDefaults.SnakeCase));
-            await writer.WriteLineAsync();
-            await writer.FlushAsync(ct);
         }
-
-        Dictionary<string, object?> final = new()
+        if (!completed) throw new IOException("Upstream stream ended before completion.");
+        var finalMessage = new JsonObject { ["role"] = "assistant", ["content"] = "" };
+        if (calls.Count > 0)
         {
-            ["model"] = model,
-            ["created_at"] = DateTime.UtcNow.ToString("o"),
-            ["message"] = new Dictionary<string, object?> { ["role"] = "assistant", ["content"] = "" },
-            ["done_reason"] = finishReason,
-            ["done"] = true
-        };
-        await writer.WriteAsync(JsonSerializer.Serialize(final, JsonDefaults.SnakeCase));
-        await writer.WriteLineAsync();
-        await writer.FlushAsync(ct);
+            var tools = new JsonArray();
+            foreach (var call in calls.Values)
+            {
+                JsonNode? arguments = JsonNode.Parse(call.Arguments.ToString());
+                if (arguments is not JsonObject || call.Name.Length == 0) throw new JsonException("Incomplete upstream tool call.");
+                tools.Add(new JsonObject { ["function"] = new JsonObject { ["name"] = call.Name.ToString(), ["arguments"] = arguments } });
+            }
+            finalMessage["tool_calls"] = tools;
+        }
+        await WriteOllamaChunk(downstream, model, finalMessage, true, finishReason, ct);
+    }
+
+    private static async Task WriteOllamaChunk(HttpResponse downstream, string model, JsonObject message, bool done, string? finishReason, CancellationToken ct)
+    {
+        var chunk = new JsonObject { ["model"] = model, ["created_at"] = DateTime.UtcNow.ToString("o"), ["message"] = message, ["done"] = done };
+        if (finishReason != null) chunk["done_reason"] = finishReason;
+        await downstream.WriteAsync(chunk.ToJsonString() + "\n", ct);
+        await downstream.Body.FlushAsync(ct);
     }
 }

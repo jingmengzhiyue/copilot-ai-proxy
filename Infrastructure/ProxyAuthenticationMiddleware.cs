@@ -1,3 +1,6 @@
+using System.Security.Cryptography;
+using System.Text;
+
 internal static class ProxyAuthenticationMiddleware
 {
     internal static IApplicationBuilder UseOptionalProxyAuthentication(this IApplicationBuilder app, string? proxyApiKey)
@@ -7,11 +10,13 @@ internal static class ProxyAuthenticationMiddleware
             return app;
         }
 
+        byte[] expectedHash = SHA256.HashData(Encoding.UTF8.GetBytes(proxyApiKey));
         app.Use(async (ctx, next) =>
         {
             string? auth = ctx.Request.Headers.Authorization;
             if (auth != null && auth.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)
-                && auth["Bearer ".Length..] == proxyApiKey)
+                && CryptographicOperations.FixedTimeEquals(
+                    SHA256.HashData(Encoding.UTF8.GetBytes(auth["Bearer ".Length..])), expectedHash))
             {
                 await next();
             }

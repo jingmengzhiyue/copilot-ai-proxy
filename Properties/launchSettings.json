@@ -3,10 +3,8 @@
     "ai-proxy-hub": {
       "commandName": "Project",
       "environmentVariables": {
-        "ASPNETCORE_ENVIRONMENT": "Development",
-        "PROXY_PORT": "11343"
-      },
-      "applicationUrl": "http://localhost:11343"
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      }
     }
   }
 }

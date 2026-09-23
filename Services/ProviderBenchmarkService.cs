@@ -78,11 +78,12 @@ internal sealed class ProviderBenchmarkService : BackgroundService
         }
     }
 
-    private async Task RunBenchmarkCycle(string outputDir, CancellationToken ct)
+    internal async Task RunBenchmarkCycle(string outputDir, CancellationToken ct)
     {
         string[] models = _modelCatalog.AvailableModels;
         List<BenchmarkResult> results = new(models.Length);
 
+        HashSet<(string Provider, string Model)> probed = [];
         foreach (string model in models)
         {
             ct.ThrowIfCancellationRequested();
@@ -94,6 +95,7 @@ internal sealed class ProviderBenchmarkService : BackgroundService
             }
 
             (ProviderInfo provider, string upstreamModel) = candidates[0];
+            if (!probed.Add((provider.Name, upstreamModel))) continue;
             results.Add(await ProbeModel(provider, model, upstreamModel, ct));
         }
 
@@ -128,14 +130,17 @@ internal sealed class ProviderBenchmarkService : BackgroundService
         try
         {
             using StringContent content = new(requestBody, Encoding.UTF8, "application/json");
-            using HttpResponseMessage response = await provider.Client.SendAsync(
-                new HttpRequestMessage(HttpMethod.Post, path) { Content = content },
-                probeCts.Token);
+            using HttpRequestMessage request = new(HttpMethod.Post, path) { Content = content };
+            using HttpResponseMessage response = await provider.Client.SendAsync(request, probeCts.Token);
 
             long latencyMs = Environment.TickCount64 - startTicks;
             return new BenchmarkResult(model, provider.Name, upstreamModel, response.IsSuccessStatusCode, (int)response.StatusCode, latencyMs, null);
         }
-        catch (Exception ex)
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException)
         {
             long latencyMs = Environment.TickCount64 - startTicks;
             return new BenchmarkResult(model, provider.Name, upstreamModel, false, 0, latencyMs, ex.GetType().Name);
@@ -168,10 +173,17 @@ internal sealed class ProviderBenchmarkService : BackgroundService
         };
 
         string json = JsonSerializer.Serialize(report, new JsonSerializerOptions { WriteIndented = true });
-        string fileName = $"provider-benchmark-{DateTime.UtcNow:yyyyMMdd-HHmmss}.json";
+        string fileName = $"provider-benchmark-{DateTime.UtcNow:yyyyMMdd-HHmmss-fffffff}.json";
         string filePath = Path.Combine(outputDir, fileName);
 
         await File.WriteAllTextAsync(filePath, json, ct);
+        // Keep a bounded history of this service's own reports; do not delete other files.
+        foreach (string oldReport in Directory.EnumerateFiles(outputDir, "provider-benchmark-*.json")
+                     .OrderByDescending(Path.GetFileName).Skip(100))
+        {
+            ct.ThrowIfCancellationRequested();
+            File.Delete(oldReport);
+        }
         _logger.LogInformation("Benchmark report written: {File} ({Ok}/{Total} OK).", filePath, report.succeeded, report.totalModels);
     }
 

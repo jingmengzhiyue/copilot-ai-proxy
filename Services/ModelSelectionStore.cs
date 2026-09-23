@@ -4,33 +4,26 @@ internal sealed class ModelSelectionStore
 {
     private readonly Dictionary<string, ModelSelectionEntry[]> _providerModelSelections;
 
-    public ModelSelectionStore()
+    public ModelSelectionStore(ILogger<ModelSelectionStore>? logger = null)
     {
-        _providerModelSelections = LoadProviderModelSelections();
+        _providerModelSelections = LoadProviderModelSelections(logger: logger);
     }
+
+    private static string SelectionProvider(string providerName) =>
+        providerName.Equals("ollama-local", StringComparison.OrdinalIgnoreCase) ? "ollama" : providerName;
 
     internal Dictionary<string, ModelSelectionEntry[]> ProviderModelSelections => _providerModelSelections;
 
     internal ModelExecutionConfig GetExecutionConfigForModel(string model, IReadOnlyDictionary<string, ProviderInfo> modelToProvider)
     {
-        // Collect every (provider, entry) that matches this model, then pick the
-        // one with the longest match substring (= most specific). This handles
-        // cases where two providers both match a given upstream id (e.g. ollama
-        // matches "nemotron" and ollamacloud matches "nemotron-3-super"): the
-        // longer match wins regardless of which JSON file is loaded first.
+        // The resolved provider owns execution settings. Only ownerless lookups
+        // search across configurations for the most specific compatible entry.
         ModelSelectionEntry best = default;
-        string? bestProvider = null;
         bool hasBest = false;
 
         if (modelToProvider.TryGetValue(model, out ProviderInfo provider))
         {
-            ModelSelectionEntry? entry = FindModelSelectionEntry(model, provider.Name);
-            if (entry.HasValue)
-            {
-                best = entry.Value;
-                bestProvider = provider.Name;
-                hasBest = true;
-            }
+            return FindModelSelectionEntry(model, provider.Name)?.Execution ?? new ModelExecutionConfig();
         }
 
         foreach (KeyValuePair<string, ModelSelectionEntry[]> kv in _providerModelSelections)
@@ -44,7 +37,7 @@ internal sealed class ModelSelectionStore
             if (!hasBest || entry.Value.Match.Length > best.Match.Length)
             {
                 best = entry.Value;
-                bestProvider = kv.Key;
+
                 hasBest = true;
             }
         }
@@ -63,7 +56,7 @@ internal sealed class ModelSelectionStore
 
     internal ModelSelectionEntry[] GetProviderModelSelections(string providerName)
     {
-        if (_providerModelSelections.TryGetValue(providerName, out ModelSelectionEntry[]? configured) && configured.Length > 0)
+        if (_providerModelSelections.TryGetValue(SelectionProvider(providerName), out ModelSelectionEntry[]? configured) && configured.Length > 0)
         {
             return configured;
         }
@@ -81,6 +74,9 @@ internal sealed class ModelSelectionStore
         }
 
         ModelSelectionEntry[] entries = GetProviderModelSelections(providerName);
+        // An explicit disabled ID must veto broader enabled substring rules.
+        if (entries.Any(entry => !entry.Enabled && m.Equals(entry.Match, StringComparison.OrdinalIgnoreCase)))
+            return null;
         ModelSelectionEntry? fallback = null;
         foreach (ModelSelectionEntry entry in entries.OrderBy(x => x.Priority))
         {
@@ -121,7 +117,7 @@ internal sealed class ModelSelectionStore
             return null;
         }
 
-        if (!_providerModelSelections.TryGetValue(providerName, out ModelSelectionEntry[]? entries))
+        if (!_providerModelSelections.TryGetValue(SelectionProvider(providerName), out ModelSelectionEntry[]? entries))
         {
             return null;
         }
@@ -154,7 +150,7 @@ internal sealed class ModelSelectionStore
             return null;
         }
 
-        if (!_providerModelSelections.TryGetValue(providerName, out ModelSelectionEntry[]? entries))
+        if (!_providerModelSelections.TryGetValue(SelectionProvider(providerName), out ModelSelectionEntry[]? entries))
         {
             return null;
         }
@@ -199,7 +195,7 @@ internal sealed class ModelSelectionStore
             return null;
         }
 
-        if (!_providerModelSelections.TryGetValue(providerName, out ModelSelectionEntry[]? entries))
+        if (!_providerModelSelections.TryGetValue(SelectionProvider(providerName), out ModelSelectionEntry[]? entries))
         {
             return null;
         }
@@ -227,14 +223,14 @@ internal sealed class ModelSelectionStore
         || lowercaseModel.Contains("parse") || lowercaseModel.Contains("detector") || lowercaseModel.Contains("clip")
         || lowercaseModel.Contains("riva-translate");
 
-    private static Dictionary<string, ModelSelectionEntry[]> LoadProviderModelSelections()
+    internal static Dictionary<string, ModelSelectionEntry[]> LoadProviderModelSelections(IEnumerable<string>? directories = null, ILogger? logger = null)
     {
         Dictionary<string, ModelSelectionEntry[]> selections = new(StringComparer.OrdinalIgnoreCase);
-        string[] candidateDirs =
-        [
-            Path.Combine(AppContext.BaseDirectory, "config", "model-selection"),
-            Path.Combine(Directory.GetCurrentDirectory(), "config", "model-selection")
-        ];
+        IEnumerable<string> candidateDirs = directories ?? new[]
+        {
+            Path.Combine(Directory.GetCurrentDirectory(), "config", "model-selection"),
+            Path.Combine(AppContext.BaseDirectory, "config", "model-selection")
+        };
 
         foreach (string dir in candidateDirs.Distinct(StringComparer.OrdinalIgnoreCase))
         {
@@ -243,12 +239,13 @@ internal sealed class ModelSelectionStore
                 continue;
             }
 
-            foreach (string file in Directory.EnumerateFiles(dir, "*.json"))
+            foreach (string file in Directory.EnumerateFiles(dir, "*.json").Order(StringComparer.OrdinalIgnoreCase))
             {
                 try
                 {
                     using JsonDocument doc = JsonDocument.Parse(File.ReadAllText(file));
                     JsonElement root = doc.RootElement;
+                    ValidateSelectionFile(root);
 
                     if (!root.TryGetProperty("provider", out JsonElement provE) || provE.ValueKind != JsonValueKind.String)
                     {
@@ -337,7 +334,7 @@ internal sealed class ModelSelectionStore
                         // Merge with existing entries for the same provider (multiple files may
                         // declare the same provider, e.g. ollama.json + ollamacloud.json both use
                         // "provider": "ollama"). Previously loaded entries are preserved.
-                        if (selections.TryGetValue(provider, out ModelSelectionEntry[] existing))
+                        if (selections.TryGetValue(provider, out ModelSelectionEntry[]? existing))
                         {
                             // Start with existing entries, then add new ones (no duplicate match strings).
                             HashSet<string> existingMatches = new(existing.Select(e => e.Match), StringComparer.OrdinalIgnoreCase);
@@ -363,14 +360,54 @@ internal sealed class ModelSelectionStore
                             .ToArray();
                     }
                 }
-                catch
+                catch (Exception ex) when (ex is JsonException or FormatException or OverflowException or IOException or UnauthorizedAccessException)
                 {
-                    // ignore malformed selection files
+                    // Report file and field identities without echoing configuration values.
+                    logger?.LogWarning("Ignoring invalid model selection file {File}; {Reason}", Path.GetFileName(file),
+                        ex is FormatException ? ex.Message : ex.GetType().Name);
                 }
             }
         }
 
         return selections;
+    }
+
+    private static void ValidateSelectionFile(JsonElement root)
+    {
+        if (root.ValueKind != JsonValueKind.Object
+            || !root.TryGetProperty("provider", out JsonElement provider) || provider.ValueKind != JsonValueKind.String
+            || string.IsNullOrWhiteSpace(provider.GetString()))
+            throw new FormatException("provider must be a non-empty string");
+        if (!root.TryGetProperty("models", out JsonElement models) || models.ValueKind != JsonValueKind.Array)
+            throw new FormatException("models must be an array");
+        int index = 0;
+        foreach (JsonElement entry in models.EnumerateArray())
+        {
+            index++;
+            if (entry.ValueKind == JsonValueKind.String) continue;
+            if (entry.ValueKind != JsonValueKind.Object) throw new FormatException($"models[{index}] must be an object or string");
+            if (entry.TryGetProperty("enabled", out JsonElement enabled) && enabled.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
+                throw new FormatException($"models[{index}].enabled must be a boolean");
+            if (entry.TryGetProperty("priority", out JsonElement priority)
+                && (priority.ValueKind != JsonValueKind.Number || !priority.TryGetInt32(out _)))
+                throw new FormatException($"models[{index}].priority must be an integer");
+            if (!entry.TryGetProperty("execution", out JsonElement execution)) continue;
+            if (execution.ValueKind != JsonValueKind.Object) throw new FormatException($"models[{index}].execution must be an object");
+            foreach (JsonProperty field in execution.EnumerateObject())
+            {
+                bool valid = field.Name switch
+                {
+                    "context_length" or "max_output_tokens" or "max_tokens" or "max_completion_tokens" or "timeout_seconds"
+                        => field.Value.ValueKind == JsonValueKind.Number && field.Value.TryGetInt32(out int value) && value > 0,
+                    "temperature" or "top_p" => field.Value.ValueKind == JsonValueKind.Number && field.Value.TryGetDouble(out double value) && double.IsFinite(value),
+                    "supports_tools" or "supports_vision" or "supports_reasoning" or "override_client_params"
+                        => field.Value.ValueKind is JsonValueKind.True or JsonValueKind.False,
+                    "family" or "reasoning_effort" => field.Value.ValueKind == JsonValueKind.String,
+                    _ => true
+                };
+                if (!valid) throw new FormatException($"models[{index}].execution.{field.Name}: invalid type or range");
+            }
+        }
     }
 
     private static ModelSelectionEntry[] GetDefaultPreferredModelSelections() =>

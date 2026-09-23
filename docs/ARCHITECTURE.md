@@ -84,7 +84,7 @@ app.MapHealthEndpoints();   // /health
 
 #### 1. `ProviderHttpClientFactory`
 
-Creates and caches HTTP clients for each provider with auth headers, base URL, and connection pooling (256 connections/server, HTTP/2).
+Creates provider HTTP clients with authentication and connection pooling (256 connections/server, HTTP/1.1). The DI-owned factory disposes its clients and shared handler when the host stops.
 
 #### 2. `ProviderRegistry`
 
@@ -106,41 +106,29 @@ Creates and caches HTTP clients for each provider with auth headers, base URL, a
 
 #### 3. `ModelSelectionStore`
 
-Loads and parses model metadata from `config/model-selection/*.json` (10 files: deepseek, openai, nvidia, groq, openrouter, moonshot, cerebras, ollamacloud, ollama, zenmux).
+Loads and validates model metadata from `config/model-selection/*.json`, preferring the working-directory entry when the application-directory copy contains the same provider and match.
 
 #### 4. `ModelCatalogService`
 
-Maintains a live catalog of available models from all providers, fetched at startup. Resolves cross-provider collisions by `(priority asc, provider order asc)`.
+Maintains a live model catalog with background discovery after startup. A hosted service checks once per minute; completed discovery attempts have a five-minute refresh interval, including empty or failed attempts. Each provider has a ten-second discovery deadline. `ModelsLastAttemptUtc` controls backoff, while `ModelsLastRefreshUtc` advances only when a non-empty catalog is published. Requests use the current catalog and exact static configuration without waiting for network discovery. Resolves cross-provider collisions by `(priority asc, provider order asc)`.
 
 #### 5. `ReasoningCacheService`
 
-Caches DeepSeek `reasoning_content` for multi-turn conversations.
+Retains a bounded, expiring internal cache API. Production requests do not write or read this cache: without a trustworthy session identity, replay could disclose reasoning across sessions. Client-supplied reasoning is preserved.
 
 #### 6. `RequestTransformer`
 
 Normalizes, filters, and injects request parameters per provider. Honours `override_client_params` force-mode.
 
-**Parameter filtering matrix:**
-
-| Provider | temperature | top_p | top_k | reasoning_effort | tools |
-|----------|:-----------:|:-----:|:-----:|:-----------------:|:-----:|
-| DeepSeek | ✅ | ⚠️ omitted | ❌ | ✅ | ✅ |
-| OpenAI | ✅ | ⚠️ omitted | ❌ | ✅ | ✅ |
-| NVIDIA NIM | ✅ | ✅ | ✅ | ❌ | ✅ |
-| Groq | ✅ | ✅ | ✅ | ❌ | ❌ |
-| OpenRouter | ✅ | ✅ | ✅ | ❌ | ✅ |
-| Ollama Cloud | ✅ | ✅ | ✅ | ❌ | ✅ |
-| Moonshot/Kimi | ✅ | ✅ | ❌ | ❌ | ✅ |
-| Cerebras | ✅ | ✅ | ✅ | ❌ | ✅ |
-| ZenMux | ✅ | ✅ | ❌ | ❌ | ✅ |
+`top_k` is removed when the provider capability says it is unsupported, even without execution defaults. Capability flags also control which configured defaults are injected; they do not imply that all client-supplied fields are removed. In particular, client `reasoning_effort`, `tools` and legacy `function_call` are preserved. Actual model support remains an upstream contract.
 
 #### 7. `OllamaResponseBuilder`
 
-Converts OpenAI JSON response → Ollama NDJSON format. Also handles image format conversion (OpenAI multi-part → Ollama `images` array).
+Builds Ollama `/api/show` metadata from the selected provider's model profile. Chat protocol and image conversion are handled by the chat endpoints and `ChatProtocol`.
 
 #### 8. `ChatStreamingService`
 
-Handles streaming responses with format conversion (SSE ↔ NDJSON) and zero-copy passthrough.
+Forwards SSE and native NDJSON, validates completion, and converts OpenAI SSE to Ollama NDJSON while assembling tool argument fragments. Ollama-to-OpenAI streaming currently buffers one native response before producing SSE.
 
 ---
 
@@ -154,13 +142,11 @@ Client (GitHub Copilot)
     │   { "model": "deepseek-v4-pro", "messages": [...], "stream": true }
     ▼
 OpenAiEndpoints.cs
-    ├─> ProviderRegistry.ResolveModel("deepseek-v4-pro")
-    ├─> ProviderRegistry.ResolveCandidates("deepseek-v4-pro")
+    ├─> ModelCatalogService.ResolveRoute("deepseek-v4-pro")
     ├─> RequestTransformer.ApplyExecutionDefaults(...)
     ├─> ChatStreamingService.StreamChatCompletionAsync(...)
     │   ├─> Forward to upstream API
     │   ├─> Receive SSE stream
-    │   ├─> ReasoningCacheService caches thinking content
     │   └─> Stream to client (pass-through, + diagnostic headers)
     ▼
 Client (Stream complete)
@@ -209,8 +195,8 @@ Both endpoints include response headers for debugging:
 |--------|-----------|-------------|
 | `X-Proxy-Requested-Model` | Both | Model name as sent by client |
 | `X-Proxy-Resolved-Model` | Both | Internal resolved model id |
-| `X-Proxy-Upstream-Model` | Both | Model sent to upstream API |
-| `X-Proxy-Provider` | Both | Provider that handled the request |
+| `X-Proxy-Upstream-Model` | `/api/chat` | Model sent to upstream API |
+| `X-Proxy-Provider` | `/api/chat` | Provider that handled the request |
 | `X-Proxy-Candidate-Count` | `/v1/*` | Number of failover candidates |
 | `X-Proxy-Primary-Provider` | `/v1/*` | Primary candidate provider |
 | `X-Proxy-Primary-Upstream` | `/v1/*` | Primary upstream model |

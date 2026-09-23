@@ -320,7 +320,7 @@ Priority order (highest to lowest):
 
 1. **System environment variables** (Windows: System Properties, Linux: `export`)
 2. **.env file** (in working directory)
-3. **appsettings.json** (project defaults)
+3. **Built-in defaults** (runtime settings are read directly from environment variables)
 
 Example `.env`:
 ```bash
@@ -691,3 +691,5 @@ app.UseRateLimiter();  // Requires policy setup
 - [CONFIGURATION.md](CONFIGURATION.md) — Configuration options
 - [TESTING.md](TESTING.md) — Testing deployment setup
 - [ARCHITECTURE.md](ARCHITECTURE.md) — System design
+
+When `PROXY_API_KEY` is set, health probes must send `Authorization: Bearer <key>`; anonymous curl examples apply only when proxy authentication is disabled. Store the key in the deployment secret store, not a hardcoded command.

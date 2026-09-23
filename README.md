@@ -104,6 +104,9 @@ DEEPSEEK_MODEL=deepseek-v4-pro
 dotnet run
 ```
 
+The launch profile does not override `PROXY_PORT`; with the example `.env` above,
+the proxy listens on port 11434. Use the same port in the client base URL.
+
 The default local base URL is:
 
 ```text
@@ -698,11 +701,18 @@ Chat responses include routing headers:
 | `X-Proxy-Requested-Model` | Model name sent by the client. |
 | `X-Proxy-Normalized-Model` | Canonical request identity before default fallback. |
 | `X-Proxy-Resolved-Model` | Effective model after routing, including default fallback. |
-| `X-Proxy-Upstream-Model` | Upstream model id sent to the provider. |
-| `X-Proxy-Provider` | Provider selected for the request. |
+| `X-Proxy-Upstream-Model` / `X-Proxy-Provider` | Selected upstream model and provider on `/api/chat`. |
+| `X-Proxy-Primary-Upstream` / `X-Proxy-Primary-Provider` | First routing candidate on `/v1/chat/completions`; non-streaming failover may use a later candidate. |
+| `X-Request-ID` | Correlates the model request with its terminal summary. |
 | `X-Proxy-Candidate-Count` | Number of failover candidates for OpenAI-compatible requests. |
 | `X-Proxy-Provider-Hint` | Explicit `@provider` / `provider/model` hint from the request, when present. |
 | `X-Proxy-Fallback-Used` | `true` when an unknown bare model was degraded to the configured default model. |
+
+Each model request produces one completion log with requested/normalized/final model,
+actual provider, fallback, HTTP status and total elapsed time. Failures, candidate
+switches and requests taking at least 30 seconds include additional safe diagnostics.
+Framework lifecycle information is reduced while Warning/Error remain visible.
+See [logging and reproducible checks](docs/testing/2026-09-17-audit-repair.md).
 
 ## Authentication
 

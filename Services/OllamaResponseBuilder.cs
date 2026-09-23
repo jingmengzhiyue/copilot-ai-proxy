@@ -7,10 +7,10 @@ internal sealed class OllamaResponseBuilder
         _modelCatalogService = modelCatalogService;
     }
 
-    internal Dictionary<string, object?> BuildOllamaShowResponse(string model)
+    internal Dictionary<string, object?> BuildOllamaShowResponse(string model, string? providerName = null)
     {
-        (int ContextLength, int MaxOutputTokens, bool SupportsTools, bool SupportsVision, string[] Capabilities, string Family) p = _modelCatalogService.GetModelProfile(model);
-        ModelExecutionConfig exec = _modelCatalogService.GetExecutionConfigForModel(model);
+        (int ContextLength, int MaxOutputTokens, bool SupportsTools, bool SupportsVision, string[] Capabilities, string Family) p = _modelCatalogService.GetModelProfile(model, providerName);
+        ModelExecutionConfig exec = providerName is null ? _modelCatalogService.GetExecutionConfigForModel(model) : _modelCatalogService.GetExecutionConfigForModel(model, providerName);
 
         return new Dictionary<string, object?>
         {

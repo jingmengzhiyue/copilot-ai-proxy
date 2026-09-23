@@ -53,7 +53,8 @@ groups = {
 print("Checking available models...")
 req = urllib.request.Request(f"{PROXY_URL}/api/tags")
 d = json.loads(urllib.request.urlopen(req).read())
-available = {m['name'] for m in d['models']}
+# The display name is presentation-only; model is the stable qualified identity.
+available = {m['model'].removesuffix(':latest') for m in d['models']}
 
 for group_name, providers in groups.items():
     print(f"\n{'='*80}")

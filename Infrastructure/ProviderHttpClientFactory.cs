@@ -1,9 +1,11 @@
 using System.Net;
 using System.Net.Http.Headers;
 
-internal sealed class ProviderHttpClientFactory
+internal sealed class ProviderHttpClientFactory : IDisposable
 {
     private readonly HttpMessageHandler _sharedHandler;
+    private readonly List<HttpClient> _clients = [];
+    private bool _disposed;
 
     public ProviderHttpClientFactory() : this(NewDefaultHandler()) { }
 
@@ -66,6 +68,29 @@ internal sealed class ProviderHttpClientFactory
             }
         }
 
+        lock (_clients)
+        {
+            if (_disposed)
+            {
+                client.Dispose();
+                throw new ObjectDisposedException(nameof(ProviderHttpClientFactory));
+            }
+            _clients.Add(client);
+        }
         return client;
+    }
+
+    // DI owns the factory. Clients borrow the shared handler, which is released once
+    // after all clients when the host stops. Custom per-call handlers stay caller-owned.
+    public void Dispose()
+    {
+        lock (_clients)
+        {
+            if (_disposed) return;
+            _disposed = true;
+            foreach (HttpClient client in _clients) client.Dispose();
+            _clients.Clear();
+            _sharedHandler.Dispose();
+        }
     }
 }

@@ -21,9 +21,19 @@ Complete configuration documentation for the multi-provider proxy supporting Dee
 
 Provider API keys must be set as environment variables. The proxy reads from:
 
-1. `.env` file (loaded by `Program.cs` if present in the project root)
-2. System environment variables
-3. `appsettings.json`
+1. Process environment variables (including explicitly empty values)
+2. `.env` defaults for keys not already set
+3. Built-in defaults
+
+These settings are read directly from environment variables; `appsettings.json` does not override them.
+The development `dotnet run` profile does not set a port, so `PROXY_PORT` in `.env`
+or the process environment selects the listener. Without either, it listens on 11434.
+
+The `.env` loader checks the application directory first, then the working directory.
+It accepts `KEY=value`, matching outer single/double quotes, blank lines and standalone
+`#` comments. Inline comments, interpolation and shell escapes are not expanded.
+The `Testing` host environment skips `.env` entirely. Model-selection JSON files have
+their own working-directory-first precedence, described below.
 
 **Discovery order:** `deepseek, openai, moonshot, google, zhipu, qwen, customopenai, cerebras, nvidia, openrouter, groq, zenmux, ollama`
 
@@ -307,7 +317,7 @@ The following table shows which parameters are supported by each provider:
 - `reasoning_effort` is only for DeepSeek and OpenAI o-series. Filtered for all others.
 - `top_k` is removed for DeepSeek, OpenAI, Moonshot/Kimi, and ZenMux.
 - `top_p` is omitted when `reasoning_effort` is set (DeepSeek/OpenAI rule).
-- `tools` are removed for Groq (API quirk).
+- Client-supplied `tools` and `reasoning_effort` are preserved; do not assume provider defaults remove them.
 
 ---
 
@@ -339,7 +349,7 @@ The proxy can also connect to a local Ollama instance. Set these in `.env`:
 PROVIDER_OLLAMA_BASE_URL=http://localhost:11434
 ```
 
-This registers a second "ollama" provider that works without an API key. When both Ollama Cloud and local Ollama are configured, the `ollamacloud.json` and `ollama.json` configs are merged under the `ollama` provider key.
+Local Ollama works without an API key. When both cloud and local are configured, cloud keeps the `ollama` identity and local uses `ollama-local`; use `model@ollama-local` to pin the local instance. Local-only deployments retain `ollama` for compatibility. Both identities use the Ollama capability/configuration family. Use a different port for the proxy and local Ollama to avoid forwarding requests back to the proxy.
 
 ### Legacy DeepSeek Format
 
@@ -359,3 +369,11 @@ PROXY_API_KEY=your-proxy-key    # Requires bearer token on all endpoints
 
 ```bash
 PROXY_PORT=8080                 # Default: 11434
+
+### Background provider benchmarks
+
+`BENCHMARK_INTERVAL_MINUTES` is disabled when unset or zero. Enabling it sends billable chat probes each cycle; aliases resolving to the same provider/upstream model are measured once. Success means HTTP success, not verified answer quality. Each probe has a 30-second deadline and observes shutdown cancellation. Reports go to `BENCHMARK_OUTPUT_DIR` or the application directory's `docs/testing/logs`; only the newest 100 `provider-benchmark-*.json` files are retained. Other files are not pruned.
+
+The proxy listens on all interfaces. Set `PROXY_API_KEY` and use firewall/TLS controls for shared networks. Authentication includes `/health`.
+
+Model-selection files in the working directory take precedence over the application-directory copy. For duplicate provider/match entries, the first entry wins; invalid files/fields produce diagnostics and are skipped. Enabled exact static model IDs for configured providers remain listed and routable even when discovery fails; this does not assert upstream health.

@@ -4,12 +4,10 @@ using System.Text.Json;
 internal sealed class RequestTransformer
 {
     private readonly ModelCatalogService _modelCatalogService;
-    private readonly ReasoningCacheService _reasoningCacheService;
 
     public RequestTransformer(ModelCatalogService modelCatalogService, ReasoningCacheService reasoningCacheService)
     {
         _modelCatalogService = modelCatalogService;
-        _reasoningCacheService = reasoningCacheService;
     }
 
     internal string ApplyExecutionDefaults(
@@ -21,16 +19,6 @@ internal sealed class RequestTransformer
         ModelExecutionConfig exec = string.IsNullOrWhiteSpace(providerName)
             ? _modelCatalogService.GetExecutionConfigForModel(model)
             : _modelCatalogService.GetExecutionConfigForModel(model, providerName);
-        bool hasAnyDefault = exec.Temperature.HasValue
-            || exec.TopP.HasValue
-            || exec.MaxTokensPreferred.HasValue
-            || exec.MaxCompletionTokensPreferred.HasValue
-            || !string.IsNullOrWhiteSpace(exec.ReasoningEffort);
-        if (!hasAnyDefault)
-        {
-            return rawBody;
-        }
-
         // Parameter support is driven by the provider's declared capabilities.
         // For unknown providers (default capabilities), all feature flags are false
         // (no reasoning_effort, no top_k) — a safe, conservative default.
@@ -208,7 +196,6 @@ internal sealed class RequestTransformer
             return null;
         }
 
-        int idx = 0;
         bool modified = false;
         using MemoryStream ms = new();
         using Utf8JsonWriter w = new(ms);
@@ -232,44 +219,14 @@ internal sealed class RequestTransformer
                     bool hasTc = msg.TryGetProperty("tool_calls", out JsonElement tcArr) && tcArr.GetArrayLength() > 0;
                     bool hasFunctionCall = msg.TryGetProperty("function_call", out JsonElement fc)
                         && fc.ValueKind == JsonValueKind.Object;
-                    string? key = null;
-
-                    if (hasTc)
-                    {
-                        List<string> ids = [];
-                        foreach (JsonElement tc in tcArr.EnumerateArray())
-                            if (tc.TryGetProperty("id", out JsonElement idE) && idE.ValueKind == JsonValueKind.String)
-                                ids.Add(idE.GetString()!);
-                        if (ids.Count > 0) key = $"toolcall:{string.Join("|", ids)}";
-                    }
-                    else
-                    {
-                        key = $"assistant:{idx++}";
-                    }
-
-                    if (key != null && _reasoningCacheService.TryGet(key, out string? rc))
-                    {
-                        bool needsInject = !msg.TryGetProperty("reasoning_content", out JsonElement exRc)
-                            || exRc.ValueKind != JsonValueKind.String
-                            || string.IsNullOrEmpty(exRc.GetString());
-
-                        if (needsInject)
-                        {
-                            w.WriteStartObject();
-                            foreach (JsonProperty mp in msg.EnumerateObject())
-                                mp.WriteTo(w);
-                            w.WriteString("reasoning_content", rc);
-                            w.WriteEndObject();
-                            modified = true;
-                            continue;
-                        }
-                    }
-
                     // Some providers (e.g. Moonshot/Kimi) reject assistant messages whose
                     // content is empty when there are no tool/function calls associated.
                     // Drop those invalid placeholders before forwarding upstream, but only
-                    // when there is no cached reasoning to preserve for thinking models.
-                    if (!hasTc && !hasFunctionCall && IsAssistantContentEmpty(msg))
+                    // when the client did not supply reasoning to preserve for thinking models.
+                    if (!hasTc && !hasFunctionCall && IsAssistantContentEmpty(msg)
+                        && !(msg.TryGetProperty("reasoning_content", out JsonElement reasoning)
+                            && reasoning.ValueKind == JsonValueKind.String
+                            && !string.IsNullOrEmpty(reasoning.GetString())))
                     {
                         modified = true;
                         continue;

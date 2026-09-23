@@ -63,7 +63,7 @@ curl http://localhost:11434/health
     "cerebras",
     "zenmux"
   ],
-  "availableModels": [
+  "available_models": [
     "deepseek-v4-pro",
     "gpt-5",
     "kimi2.7-code",
@@ -71,14 +71,15 @@ curl http://localhost:11434/health
     "z-ai/glm-5.2-free",
     "... (~60 models total)"
   ],
-  "defaultModel": "deepseek-v4-pro"
+  "model": "deepseek-v4-pro",
+  "models_last_refresh_utc": "2026-09-17T00:00:00Z"
 }
 ```
 
 > Providers without env vars are silently skipped — only configured providers are listed.
 
 **Status Codes:**
-- `200 OK` — Proxy is healthy and at least one provider is configured
+- `200 OK` — The process is responsive; inspect `providers` separately (it may be empty)
 
 ---
 
@@ -299,19 +300,17 @@ Vision-capable models (e.g. `kimi-k2.7-code-free`, `qwen3.7-plus`, `gemini-3.5-f
 
 ### Common Error Responses
 
-**400 Bad Request** — Invalid parameter combination:
+**400 Bad Request** — Invalid request shape:
 ```json
 {
-  "error": "reasoning_effort not supported by NVIDIA provider",
-  "code": "UNSUPPORTED_PARAMETER"
+  "error": { "message": "Invalid field: messages.", "type": "invalid_request_error", "code": "invalid_parameter", "param": "messages" }
 }
 ```
 
 **502 Bad Gateway** — All provider candidates failed:
 ```json
 {
-  "error": "no provider candidate available",
-  "code": "ALL_PROVIDERS_FAILED"
+  "error": { "message": "All provider candidates failed.", "type": "upstream_error", "code": "upstream_unavailable" }
 }
 ```
 
@@ -322,20 +321,10 @@ Vision-capable models (e.g. `kimi-k2.7-code-free`, `qwen3.7-plus`, `gemini-3.5-f
 ### How the Proxy Selects a Provider
 
 1. **Request arrives** with model name
-2. **Proxy resolves** via `ProviderRegistry.ResolveModel()` (3-level hint resolution)
-3. **Candidate selection** via `ProviderRegistry.ResolveCandidates()`:
-   - Bare id like `glm-5.2-free`: returns every provider offering it, ordered by priority
-   - Qualified id like `z-ai/glm-5.2-free@zenmux`: returns only that provider (no failover)
-4. **Failover**: Non-streaming requests retry next candidate; streaming does not failover
-5. **Response**: forwarded with diagnostic headers
-
-### 3-level `provider/model` hint resolution
-
-`ProviderRegistry.ResolveModel()` handles the OpenAI-style `provider/model` form:
-
-1. **Verbatim** — full id exists in the registry
-2. **Strip prefix** — strip the provider prefix and look up the bare name
-3. **Suffix match within hinted provider** — find any upstream id owned by the hinted provider whose suffix equals the bare name
+2. **Proxy resolves** via the shared `ModelCatalogService.ResolveRoute` used by both chat APIs and `/api/show`.
+3. **Candidate selection**: discovered claims first, then enabled exact static configuration for active providers, then the default for unknown bare ids. Explicit provider hints remain strict.
+4. **Failover**: non-streaming automatic requests can try the next candidate; streaming does not failover.
+5. **Response**: diagnostic headers describe the resolved route. Invalid JSON is rejected before routing.
 
 ---
 
@@ -373,3 +362,5 @@ Provider API keys are set via environment variables:
 | VS 2026 BYOM | `/api/*` | Ollama | ✅ Fully supported |
 | Native Ollama Client | `/api/*` | Ollama | ✅ Fully supported |
 | OpenAI SDK | `/v1/*` | OpenAI | ✅ Fully supported |
+
+`PROXY_API_KEY` protects all endpoints, including `/health`. Supply the Bearer header in authenticated deployments. Client-supplied reasoning is forwarded; the proxy does not restore reasoning from a process-wide cache because requests have no trustworthy session identity.

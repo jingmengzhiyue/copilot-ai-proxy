@@ -4,12 +4,15 @@ internal sealed class ModelCatalogService
 {
     private readonly ProviderRegistry _providerRegistry;
     private readonly ModelSelectionStore _modelSelectionStore;
+    private readonly ILogger<ModelCatalogService>? _logger;
+    private readonly SemaphoreSlim _refreshGate = new(1, 1);
     private readonly TimeSpan _modelsRefreshInterval = TimeSpan.FromMinutes(5);
 
-    public ModelCatalogService(ProviderRegistry providerRegistry, ModelSelectionStore modelSelectionStore)
+    public ModelCatalogService(ProviderRegistry providerRegistry, ModelSelectionStore modelSelectionStore, ILogger<ModelCatalogService>? logger = null)
     {
         _providerRegistry = providerRegistry;
         _modelSelectionStore = modelSelectionStore;
+        _logger = logger;
         AvailableModels = [_providerRegistry.DefaultModel];
         ModelsLastRefreshUtc = DateTime.MinValue;
     }
@@ -18,17 +21,31 @@ internal sealed class ModelCatalogService
 
     internal DateTime ModelsLastRefreshUtc { get; private set; }
 
-    internal async Task RefreshAvailableModelsIfNeeded(CancellationToken ct)
-    {
-        if (DateTime.UtcNow - ModelsLastRefreshUtc < _modelsRefreshInterval)
-        {
-            return;
-        }
+    internal DateTime ModelsLastAttemptUtc { get; private set; }
 
-        await RefreshAvailableModels(ct);
+    internal Task RefreshAvailableModelsIfNeeded(CancellationToken ct) => RefreshCore(ct, false);
+
+    internal Task RefreshAvailableModels(CancellationToken ct) => RefreshCore(ct, true);
+
+    private async Task RefreshCore(CancellationToken ct, bool force)
+    {
+        DateTime requestedAt = DateTime.UtcNow;
+        await _refreshGate.WaitAsync(ct);
+        try
+        {
+            if ((!force && DateTime.UtcNow - ModelsLastAttemptUtc < _modelsRefreshInterval)
+                || ModelsLastAttemptUtc >= requestedAt)
+                return;
+            await RefreshAvailableModelsCore(ct);
+            ModelsLastAttemptUtc = DateTime.UtcNow;
+        }
+        finally
+        {
+            _refreshGate.Release();
+        }
     }
 
-    internal async Task RefreshAvailableModels(CancellationToken ct)
+    private async Task RefreshAvailableModelsCore(CancellationToken ct)
     {
         try
         {
@@ -52,7 +69,7 @@ internal sealed class ModelCatalogService
                         continue;
                     }
 
-                    (int ContextLength, _, _, _, _, _) = GetModelProfile(m);
+                    (int ContextLength, _, _, _, _, _) = GetModelProfile(m, prov.Name);
                     if (ContextLength == 0)
                     {
                         continue;
@@ -121,7 +138,7 @@ internal sealed class ModelCatalogService
 
             if (allModels.Count > 0)
             {
-                AvailableModels = allModels
+                string[] availableModels = allModels
                     .OrderBy(model => _modelSelectionStore.GetPreferredModelPriority(newUpstream[model], newMap[model].Name))
                     .ThenBy(x => x, StringComparer.OrdinalIgnoreCase)
                     .ToArray();
@@ -138,13 +155,33 @@ internal sealed class ModelCatalogService
                         .ToList();
                     upstreamToProviders[upstreamId] = [.. ordered.Select(c => c.Provider).Distinct(ProviderInfoNameComparer.Instance)];
                 }
-                _providerRegistry.UpdateModelMappings(newMap, newUpstream, upstreamToProviders);
-                ModelsLastRefreshUtc = DateTime.UtcNow;
+                lock (_providerRegistry.CatalogSync)
+                {
+                    _providerRegistry.UpdateModelMappings(newMap, newUpstream, upstreamToProviders);
+                    AvailableModels = availableModels;
+                    ModelsLastRefreshUtc = DateTime.UtcNow;
+                }
             }
         }
-        catch
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
-            // keep current fallback list when discovery fails
+            throw;
+        }
+    }
+
+    internal IEnumerable<(string Provider, string Model)> GetConfiguredModels()
+    {
+        foreach (ProviderInfo provider in _providerRegistry.Providers)
+        {
+            foreach (ModelSelectionEntry entry in _modelSelectionStore.GetProviderModelSelections(provider.Name))
+            {
+                if (_modelSelectionStore.FindExactModelSelectionEntry(entry.Match, provider.Name) is null)
+                    continue;
+                yield return (provider.Name, entry.Match);
+                yield return (provider.Name, $"{entry.Match}@{provider.Name}");
+                if (!string.IsNullOrWhiteSpace(entry.DisplayName))
+                    yield return (provider.Name, $"{entry.DisplayName}@{provider.Name}");
+            }
         }
     }
 
@@ -184,10 +221,18 @@ internal sealed class ModelCatalogService
             obj.Name is null ? 0 : StringComparer.OrdinalIgnoreCase.GetHashCode(obj.Name);
     }
 
-    internal (int ContextLength, int MaxOutputTokens, bool SupportsTools, bool SupportsVision, string[] Capabilities, string Family) GetModelProfile(string model)
+    internal (int ContextLength, int MaxOutputTokens, bool SupportsTools, bool SupportsVision, string[] Capabilities, string Family) GetModelProfile(string model, string? providerName = null)
     {
-        string configModel = ResolveConfigModel(model);
-        ModelExecutionConfig configured = _modelSelectionStore.GetExecutionConfigForModel(configModel, _providerRegistry.ModelToProvider);
+        lock (_providerRegistry.CatalogSync)
+            return GetModelProfileCore(model, providerName);
+    }
+
+    private (int ContextLength, int MaxOutputTokens, bool SupportsTools, bool SupportsVision, string[] Capabilities, string Family) GetModelProfileCore(string model, string? providerName)
+    {
+        string configModel = ResolveConfigModel(model, providerName);
+        ModelExecutionConfig configured = providerName is null
+            ? _modelSelectionStore.GetExecutionConfigForModel(configModel, _providerRegistry.ModelToProvider)
+            : GetExecutionConfigForModel(configModel, providerName);
         string m = configModel.ToLowerInvariant();
         bool tools = configured.SupportsTools ?? true;
         bool vision = configured.SupportsVision ?? (m.Contains("vision") || m.Contains("-vl") || m.Contains("neva") || m.Contains("vila") || m.Contains("fuyu") || m.Contains("kosmos"));
@@ -264,7 +309,7 @@ internal sealed class ModelCatalogService
         ctx = configured.ContextLength ?? ctx;
         maxOut = configured.MaxOutputTokens ?? maxOut;
 
-        string[] capabilities = vision ? ["completion", "tools", "vision"] : ["completion", "tools"];
+        string[] capabilities = ["completion", .. tools ? new[] { "tools" } : [], .. vision ? new[] { "vision" } : []];
 
         string family = configured.Family
             ?? (m.Contains("deepseek") ? "deepseek"
@@ -277,8 +322,8 @@ internal sealed class ModelCatalogService
             : m.Contains("granite") ? "ibm"
             : m.Contains("gpt-oss") ? "openai"
             : m.Contains("nemotron") ? "nvidia"
-            : _providerRegistry.ModelToProvider.TryGetValue(model, out ProviderInfo prov) ? prov.Name
-            : "api");
+            : providerName ?? (_providerRegistry.ModelToProvider.TryGetValue(model, out ProviderInfo prov) ? prov.Name
+            : "api"));
 
         return (ctx, maxOut, tools, vision, capabilities, family);
     }
@@ -299,15 +344,31 @@ internal sealed class ModelCatalogService
         return linked;
     }
 
-    internal ModelExecutionConfig GetExecutionConfigForModel(string model) =>
-        _modelSelectionStore.GetExecutionConfigForModel(ResolveConfigModel(model), _providerRegistry.ModelToProvider);
+    internal ModelExecutionConfig GetExecutionConfigForModel(string model)
+    {
+        lock (_providerRegistry.CatalogSync)
+            return _modelSelectionStore.GetExecutionConfigForModel(ResolveConfigModel(model), _providerRegistry.ModelToProvider);
+    }
 
-    internal ModelExecutionConfig GetExecutionConfigForModel(string model, string providerName) =>
-        _modelSelectionStore.FindModelSelectionEntry(ResolveConfigModel(model), providerName)?.Execution
-        ?? new ModelExecutionConfig();
+    internal ModelExecutionConfig GetExecutionConfigForModel(string model, string providerName)
+    {
+        lock (_providerRegistry.CatalogSync)
+            return _modelSelectionStore.FindModelSelectionEntry(ResolveConfigModel(model, providerName), providerName)?.Execution
+                ?? new ModelExecutionConfig();
+    }
 
-    private string ResolveConfigModel(string model) =>
-        _providerRegistry.ModelToUpstream.TryGetValue(model, out string? upstream) ? upstream : model;
+    private string ResolveConfigModel(string model, string? providerName = null)
+    {
+        if (providerName is not null)
+        {
+            if (_providerRegistry.ModelToUpstream.TryGetValue($"{model}@{providerName}", out string? qualified))
+                return qualified;
+            if (!_providerRegistry.ModelToProvider.TryGetValue(model, out ProviderInfo owner)
+                || !owner.Name.Equals(providerName, StringComparison.OrdinalIgnoreCase))
+                return model;
+        }
+        return _providerRegistry.ModelToUpstream.TryGetValue(model, out string? upstream) ? upstream : model;
+    }
 
     /// <summary>
     /// The single, shared model-identity resolver used by every endpoint
@@ -333,6 +394,12 @@ internal sealed class ModelCatalogService
     /// (OpenRouter ":free" / ":batch") are tried verbatim first.
     /// </summary>
     internal ResolvedRoute ResolveRoute(string? requestedModel)
+    {
+        lock (_providerRegistry.CatalogSync)
+            return ResolveRouteCore(requestedModel);
+    }
+
+    private ResolvedRoute ResolveRouteCore(string? requestedModel)
     {
         bool isDefaultRequest = string.IsNullOrWhiteSpace(requestedModel);
         string requested = isDefaultRequest ? _providerRegistry.DefaultModel : requestedModel!.Trim();
@@ -662,6 +729,12 @@ internal sealed class ModelCatalogService
     /// </summary>
     internal void EnsureDefaultModelPresent(CancellationToken ct)
     {
+        lock (_providerRegistry.CatalogSync)
+            EnsureDefaultModelPresentCore();
+    }
+
+    private void EnsureDefaultModelPresentCore()
+    {
         string defaultModel = _providerRegistry.DefaultModel;
         if (AvailableModels.Any(m => string.Equals(m, defaultModel, StringComparison.OrdinalIgnoreCase)))
         {
@@ -716,30 +789,39 @@ internal sealed class ModelCatalogService
         }
     }
 
-    private static async Task<string[]> TryGetModelsFromProvider(ProviderInfo provider, CancellationToken ct)
+    private async Task<string[]> TryGetModelsFromProvider(ProviderInfo provider, CancellationToken ct)
     {
         try
         {
             string modelsPath = provider.Capabilities.ModelsPath;
 
-            using HttpResponseMessage resp = await provider.Client.GetAsync(modelsPath, ct);
+            using CancellationTokenSource timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            timeout.CancelAfter(TimeSpan.FromSeconds(10));
+            using HttpResponseMessage resp = await provider.Client.GetAsync(modelsPath, timeout.Token);
             if (!resp.IsSuccessStatusCode)
             {
+                _logger?.LogWarning("Model discovery failed Provider={Provider} Status={Status}", provider.Name, (int)resp.StatusCode);
                 return [];
             }
 
-            string body = await resp.Content.ReadAsStringAsync(ct);
+            string body = await resp.Content.ReadAsStringAsync(timeout.Token);
             using JsonDocument doc = JsonDocument.Parse(body);
             return ExtractModels(doc.RootElement);
         }
-        catch
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
+            throw;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException or JsonException)
+        {
+            _logger?.LogWarning("Model discovery failed Provider={Provider} Error={Error}", provider.Name, ex.GetType().Name);
             return [];
         }
     }
 
     private static string[] ExtractModels(JsonElement root)
     {
+        if (root.ValueKind != JsonValueKind.Object) return [];
         IEnumerable<JsonElement> items = [];
 
         if (root.TryGetProperty("data", out JsonElement data) && data.ValueKind == JsonValueKind.Array)
