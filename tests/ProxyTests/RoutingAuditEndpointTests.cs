@@ -71,6 +71,59 @@ public sealed class RoutingAuditEndpointTests
     }
 
     [Theory]
+    [InlineData("k3@kimicode", true)]
+    [InlineData("k3@kimicode", false)]
+    [InlineData("deepseek-v4-pro@deepseek", true)]
+    public async Task ReasoningDetails_OnlyKimiDropsStreamingIndexFromAssistantHistory(string model, bool stream)
+    {
+        await using var host = await AuditHost.Start();
+        string body = JsonSerializer.Serialize(new
+        {
+            model, stream,
+            messages = new object[]
+            {
+                new { role = "system", content = "Synthetic instructions." },
+                new { role = "user", content = "Use echo." },
+                new { role = "assistant", content = (string?)null, reasoning_content = "thinking",
+                    reasoning_details = new object[]
+                    {
+                        new { type = "summary", summary = "thinking", index = 0, metadata = new { index = 7 } },
+                        new { type = "encrypted", encrypted = "opaque", index = 1 }
+                    },
+                    tool_calls = new[] { new { id = "call_1", type = "function", function = new { name = "echo", arguments = "{}" } } } },
+                new { role = "tool", tool_call_id = "call_1", content = "OK" }
+            }
+        });
+        host.Handler.Stream = stream;
+        using var response = await host.Client.PostAsync("/v1/chat/completions", new StringContent(body, Encoding.UTF8, "application/json"));
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var captured = JsonDocument.Parse(host.Handler.Body!);
+        using var original = JsonDocument.Parse(body);
+        JsonElement originalMessage = original.RootElement.GetProperty("messages")[2];
+        JsonElement actualMessage = captured.RootElement.GetProperty("messages")[2];
+        JsonElement details = actualMessage.GetProperty("reasoning_details");
+        Assert.Equal(originalMessage.GetProperty("reasoning_content").GetString(), actualMessage.GetProperty("reasoning_content").GetString());
+        Assert.True(JsonElement.DeepEquals(originalMessage.GetProperty("tool_calls"), actualMessage.GetProperty("tool_calls")));
+        Assert.Equal("thinking", details[0].GetProperty("summary").GetString());
+        Assert.Equal("opaque", details[1].GetProperty("encrypted").GetString());
+        Assert.Equal(7, details[0].GetProperty("metadata").GetProperty("index").GetInt32());
+        Assert.Equal(model.Contains("kimicode") == false, details[0].TryGetProperty("index", out _));
+        Assert.Equal(model.Contains("kimicode") == false, details[1].TryGetProperty("index", out _));
+    }
+
+    [Fact]
+    public async Task OlderKimiHistoryWithoutReasoningDetails_IsPreserved()
+    {
+        await using var host = await AuditHost.Start();
+        const string body = """{"model":"k3@kimicode","messages":[{"role":"assistant","content":null,"reasoning_content":"thinking","tool_calls":[{"id":"call_1","type":"function","function":{"name":"echo","arguments":"{}"}}]},{"role":"tool","tool_call_id":"call_1","content":"OK"}]}""";
+        using var response = await host.Client.PostAsync("/v1/chat/completions", new StringContent(body, Encoding.UTF8, "application/json"));
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var captured = JsonDocument.Parse(host.Handler.Body!);
+        using var original = JsonDocument.Parse(body);
+        Assert.True(JsonElement.DeepEquals(original.RootElement.GetProperty("messages"), captured.RootElement.GetProperty("messages")));
+    }
+
+    [Theory]
     [InlineData(401, false)] [InlineData(402, false)] [InlineData(403, false)]
     [InlineData(404, false)] [InlineData(429, false)] [InlineData(500, false)] [InlineData(503, false)]
     [InlineData(401, true)] [InlineData(402, true)] [InlineData(403, true)]

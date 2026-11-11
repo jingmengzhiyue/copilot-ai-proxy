@@ -364,3 +364,8 @@ Provider API keys are set via environment variables:
 | OpenAI SDK | `/v1/*` | OpenAI | ✅ Fully supported |
 
 `PROXY_API_KEY` protects all endpoints, including `/health`. Supply the Bearer header in authenticated deployments. Client-supplied reasoning is forwarded; the proxy does not restore reasoning from a process-wide cache because requests have no trustworthy session identity.
+
+For Kimi Code and Kimi upstreams, assistant-history `reasoning_details` retains its
+reasoning fields but drops the stream-only `index` on each detail before forwarding.
+This accepts clients that replay streamed reasoning. Older `reasoning_content`
+requests are unchanged; other providers' detail entries are not rewritten.

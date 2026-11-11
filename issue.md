@@ -1705,3 +1705,13 @@ dotnet test tests/ProxyTests/ProxyTests.csproj -c Debug
 修复：仅移除 launch profile 的固定端口及 applicationUrl，保留 Development 环境；启动监听由进程 `PROXY_PORT`、`.env`、默认 11434 决定。新增真实运行探针对 profile 无端口覆盖的断言，README/CONFIGURATION 同步说明。用户的 `.env` 和客户端配置未改动。
 
 实际验证：在项目目录执行 `dotnet run --no-build --no-restore -c Release`，输出 `URL: http://localhost:11434/v1` 和 `Now listening on: http://0.0.0.0:11434`；对 11434 的 `/health`、`/v1/models` 均得到 HTTP 200，11343 没有监听。此运行验证连接的是服务本身，没有向真实模型发送生成请求。`minimax Status=401` 表示该提供商目录鉴权失败，是独立于本地 ConnectionRefused 的问题；需检查该上游 key/权限，不应通过改端口或重试掩盖。当前执行环境的其他上游发现还出现 HttpRequestException，不能据此断言用户网络中的真实模型生成已恢复；原有本地模拟上游的请求/日志验证仍成立。
+
+### 2026-09-23 追加回归：新版 VS 回放 Kimi 流式推理索引
+
+用户的新 VS 请求选择 `KIMICODE - k3:latest`，路由到 kimicode/k3 后收到上游 400：`the reasoning_details at position 2 entry 0 must not contain streaming index`。旧客户端只带 `reasoning_content` 时没有该条目；新版客户端可能将上一轮流式响应的 `reasoning_details[].index` 连同推理记录回放。代码核对表明 `/v1/chat/completions` 的请求转换此前原样写出 `messages`，因此未去除流式专用字段；DeepSeek 能接受相同请求不等于 Kimi 也接受。此结论由错误原文、实际调用链及修复前的合成端点回归支持；未截取用户完整消息或凭证。
+
+**修复状态：已落实。** `RequestTransformer.ApplyExecutionDefaults` 仅在最终候选属于 `kimicode` 或 `kimi` 时，遍历助手历史消息中的 `reasoning_details` 数组，仅删除每个条目直接持有的 `index`。保留 `type`、`summary`、`encrypted`、嵌套元数据、`reasoning_content`、工具调用与其他角色消息；其他 Provider 的 detail 条目不重写。旧版 VS 不带 `reasoning_details` 的请求不变；仅有 `reasoning_details` 的非空推理历史也不再作为空助手占位消息删除。真实密钥、完整请求正文、加密推理内容均不写入新日志。
+
+**复现与验证：** 新增生产端点回归先在修复前失败 2 项（Kimi 流式/非流式的索引仍存在），修复后 4/4 项通过，覆盖 Kimi 新旧历史与 DeepSeek 不变；转换层另覆盖 `kimicode`/`kimi`/`deepseek`、嵌套 index 保留和纯推理历史。最终全套 581/581 通过，Release 编译无新增警告，`git diff --check` 通过。测试使用合成历史和隔离 HTTP 上游，未能直接运行用户的 VS2026 版本或付费 Kimi 请求；需重启新构建后由实际 VS 会话确认端到端效果。
+
+用户贴出的 `[Routing]`、`Proxy.Routing` 和 ASP.NET Information 生命周期日志与当前源码不符：当前实现使用 `Proxy.Requests` 摘要并将两个生命周期类别最低级别设为 Warning。该日志应来自旧构建或此前运行记录；重启后若仍出现，应核对正在监听 11434 的进程实际路径和版本，避免把旧进程的结果归因于本次修复。

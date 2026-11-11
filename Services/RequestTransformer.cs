@@ -118,6 +118,13 @@ internal sealed class RequestTransformer
                     // Skip top_k for providers that don't support it
                     continue;
                 }
+                else if ((string.Equals(providerName, "kimicode", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(providerName, "kimi", StringComparison.OrdinalIgnoreCase))
+                    && prop.NameEquals("messages") && prop.Value.ValueKind == JsonValueKind.Array)
+                {
+                    writer.WritePropertyName("messages");
+                    WriteKimiMessages(writer, prop.Value);
+                }
                 else
                 {
                     prop.WriteTo(writer);
@@ -146,6 +153,54 @@ internal sealed class RequestTransformer
         {
             return rawBody;
         }
+    }
+
+    private static void WriteKimiMessages(Utf8JsonWriter writer, JsonElement messages)
+    {
+        writer.WriteStartArray();
+        foreach (JsonElement message in messages.EnumerateArray())
+        {
+            if (message.ValueKind != JsonValueKind.Object
+                || !message.TryGetProperty("role", out JsonElement role)
+                || role.ValueKind != JsonValueKind.String || role.GetString() != "assistant"
+                || !message.TryGetProperty("reasoning_details", out JsonElement details)
+                || details.ValueKind != JsonValueKind.Array)
+            {
+                message.WriteTo(writer);
+                continue;
+            }
+
+            writer.WriteStartObject();
+            foreach (JsonProperty property in message.EnumerateObject())
+            {
+                if (!property.NameEquals("reasoning_details"))
+                {
+                    property.WriteTo(writer);
+                    continue;
+                }
+
+                writer.WritePropertyName("reasoning_details");
+                writer.WriteStartArray();
+                foreach (JsonElement detail in details.EnumerateArray())
+                {
+                    if (detail.ValueKind != JsonValueKind.Object)
+                    {
+                        detail.WriteTo(writer);
+                        continue;
+                    }
+
+                    // Kimi emits index in streaming deltas but rejects it when the
+                    // same reasoning detail is replayed in assistant history.
+                    writer.WriteStartObject();
+                    foreach (JsonProperty field in detail.EnumerateObject())
+                        if (!field.NameEquals("index")) field.WriteTo(writer);
+                    writer.WriteEndObject();
+                }
+                writer.WriteEndArray();
+            }
+            writer.WriteEndObject();
+        }
+        writer.WriteEndArray();
     }
 
     internal string ReplaceModelInRequestBody(string rawBody, string upstreamModel)
@@ -226,7 +281,9 @@ internal sealed class RequestTransformer
                     if (!hasTc && !hasFunctionCall && IsAssistantContentEmpty(msg)
                         && !(msg.TryGetProperty("reasoning_content", out JsonElement reasoning)
                             && reasoning.ValueKind == JsonValueKind.String
-                            && !string.IsNullOrEmpty(reasoning.GetString())))
+                            && !string.IsNullOrEmpty(reasoning.GetString()))
+                        && !(msg.TryGetProperty("reasoning_details", out JsonElement details)
+                            && details.ValueKind == JsonValueKind.Array && details.GetArrayLength() > 0))
                     {
                         modified = true;
                         continue;

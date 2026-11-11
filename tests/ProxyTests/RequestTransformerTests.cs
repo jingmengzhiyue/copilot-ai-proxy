@@ -538,6 +538,29 @@ public class RequestTransformerTests
         Assert.Null(CreateTransformer().ModifyRequest(doc));
     }
 
+    [Fact]
+    public void ModifyRequest_PreservesReasoningDetailsWithoutText()
+    {
+        using JsonDocument doc = JsonDocument.Parse("""{"messages":[{"role":"assistant","content":null,"reasoning_details":[{"type":"encrypted","encrypted":"opaque","index":0}]}]}""");
+        Assert.Null(CreateTransformer().ModifyRequest(doc));
+    }
+
+    [Theory]
+    [InlineData("kimicode", false)]
+    [InlineData("kimi", false)]
+    [InlineData("deepseek", true)]
+    public void ApplyExecutionDefaults_RemovesOnlyKimiStreamingReasoningIndex(string provider, bool keepsIndex)
+    {
+        const string body = """{"messages":[{"role":"assistant","content":null,"reasoning_details":[{"type":"summary","summary":"text","index":0,"metadata":{"index":7}},{"type":"encrypted","encrypted":"opaque","index":1}]}]}""";
+        string result = CreateTransformer().ApplyExecutionDefaults(body, "model", ProviderCapabilitiesRegistry.Get(provider), provider);
+        using JsonDocument doc = JsonDocument.Parse(result);
+        JsonElement details = doc.RootElement.GetProperty("messages")[0].GetProperty("reasoning_details");
+        Assert.Equal(keepsIndex, details[0].TryGetProperty("index", out _));
+        Assert.Equal(keepsIndex, details[1].TryGetProperty("index", out _));
+        Assert.Equal(7, details[0].GetProperty("metadata").GetProperty("index").GetInt32());
+        Assert.Equal("opaque", details[1].GetProperty("encrypted").GetString());
+    }
+
     private static RequestTransformer CreateTransformer()
     {
         return CreateTransformer(out _);
